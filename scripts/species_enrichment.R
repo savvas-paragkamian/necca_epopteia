@@ -30,45 +30,108 @@ hellenic_borders_shp <- sf::st_read("../spatial_data/hellenic_borders/hellenic_b
     st_transform(4326)
 
 # the species of the previous epopteia 2015
-species_names <- c("Apatura metis",
-                   "Astacus astacus",
-                   "Austropotamobius torrentium",
-                   "Bolbelasmus unicornis",
-                   "Buprestis splendens",
-                   "Catopta thrips",
-                   "Cerambyx cerdo",
-                   "Coenagrion ornatum",
-                   "Cordulegaster heros",
-                   "Dioszeghyana schmidtii",
-                   "Eriogaster catax",
-                   "Euphydryas aurinia",
-                   "Euplagia quadripunctaria",
-                   "Hyles hippophaes",
-                   "Lindenia tetraphylla",
-                   "Lucanus cervus",
-                   "Lycaena dispar",
-                   "Maculinea arion",
-                   "Ophiogomphus cecilia",
-                   "Papilio alexanor",
-                   "Paracaloptenus caloptenoides",
-                   "Parnassius apollo",
-                   "Parnassius mnemosyne",
-                   "Polyommatus eroides",
-                   "Probaticus subrugosus",
-                   "Proserpinus proserpina",
-                   "Pseudophilotes bavius",
-                   "Rhysodes sulcatus",
-                   "Rosalia alpina",
-                   "Stenobothrus eurasius",
-                   "Stylurus flavipes",
-                   "Unio crassus",
-                   "Unio elongatulus",
-                   "Vertigo angustior",
-                   "Vertigo moulinsiana",
-                   "Zerynthia polyxena",
-                   "Morimus asper funereus",
-                   "Osmoderma eremita Complex",
-                   "Hirudo verbana")
+
+invertebrates_92_43 <- readxl::read_excel("../data/invertebrates_92_43.xlsx", skip=2, col_names=F)
+
+species_names <- unique(invertebrates_92_43$...3) 
+
+#species_names <- c("Apatura metis",
+#                   "Astacus astacus",
+#                   "Austropotamobius torrentium",
+#                   "Bolbelasmus unicornis",
+#                   "Buprestis splendens",
+#                   "Catopta thrips",
+#                   "Cerambyx cerdo",
+#                   "Coenagrion ornatum",
+#                   "Cordulegaster heros",
+#                   "Dioszeghyana schmidtii",
+#                   "Eriogaster catax",
+#                   "Euphydryas aurinia",
+#                   "Euplagia quadripunctaria",
+#                   "Hyles hippophaes",
+#                   "Lindenia tetraphylla",
+#                   "Lucanus cervus",
+#                   "Lycaena dispar",
+#                   "Maculinea arion",
+#                   "Ophiogomphus cecilia",
+#                   "Papilio alexanor",
+#                   "Paracaloptenus caloptenoides",
+#                   "Parnassius apollo",
+#                   "Parnassius mnemosyne",
+#                   "Polyommatus eroides",
+#                   "Probaticus subrugosus",
+#                   "Proserpinus proserpina",
+#                   "Pseudophilotes bavius",
+#                   "Rhysodes sulcatus",
+#                   "Rosalia alpina",
+#                   "Stenobothrus eurasius",
+#                   "Stylurus flavipes",
+#                   "Unio crassus",
+#                   "Unio elongatulus",
+#                   "Vertigo angustior",
+#                   "Vertigo moulinsiana",
+#                   "Zerynthia polyxena",
+#                   "Morimus asper funereus",
+#                   "Osmoderma eremita Complex",
+#                   "Hirudo verbana")
+
+## Natura2000 v32 version
+
+natura_v32_species <- read_delim("../data/Natura2000DB_V32_species.tsv",delim="\t")
+natura_v32_site <- read_delim("../data/Natura2000DB_V32_site.tsv",delim="\t")
+natura_v32_region <- read_delim("../data/Natura2000DB_V32_region.tsv",delim="\t")
+natura_v32_other_species <- read_delim("../data/Natura2000DB_V32_other_species.tsv",delim="\t")
+
+groups_df <- data.frame(SPECIES_GROUP=c("R","B","A","M","I","F","P"),
+                    groups_names=c("Reptiles", "Birds", "Amphibians", "Mammals", "Invertebrates", "Fish", "Plants"))
+
+## Descriptives 
+all_species <- unique(c(unique(natura_v32_species$SPECIES_NAME),unique(natura_v32_other_species$OTHER_SPECIES_NAME)))
+
+natura_v32_species_sum <- natura_v32_species |> 
+    distinct(SPECIES_NAME,SPECIES_GROUP,SITE_CODE) |>
+
+natura_v32_other_species_sum <- natura_v32_other_species |> 
+    distinct(OTHER_SPECIES_NAME,OTHER_SPECIES_GROUP, SITE_CODE)
+
+colnames(natura_v32_other_species_sum) <- colnames(natura_v32_species_sum)
+
+natura_v32_all_species <- rbind(natura_v32_other_species_sum, natura_v32_species_sum) |>
+    distinct()
+
+groups_species_summary <- natura_v32_all_species |>
+    distinct(SPECIES_NAME, SPECIES_GROUP) |>
+    group_by(SPECIES_GROUP) |> 
+    summarise(n_species=n()) |>
+    left_join(groups_df)
+
+invertebrates_all <- natura_v32_all_species |>
+    filter(SPECIES_GROUP=="I")
+
+invertebrates_all_natura_summary <- invertebrates_all |>
+    group_by(SITE_CODE) |>
+    summarise(n_species=n()) |> 
+    left_join(natura_v32_region)
+
+invertebrates_all_natura_summary_region <- invertebrates_all_natura_summary |>
+    group_by(REGION_NAME) |>
+    summarise(n_species=sum(n_species), n_sites=n())
+
+
+
+### regions
+## some sites are in multiple regions 
+# > natura_v32_region |> distinct(REGION_CODE,SITE_CODE) |> group_by(SITE_CODE) |> summarise(n=n()) |> arrange(desc(n))
+
+## overlap
+## 16 not included, 23 included
+invertebrates_not_in_natura <- species_names[which(!(species_names %in% natura_v32_species$SPECIES_NAME))]
+invertebrates_not_in_other_natura <- species_names[which(!(species_names %in% natura_v32_other_species$OTHER_SPECIES_NAME))]
+
+
+invertebrates_not_everywhere <- species_names[which(!(species_names %in% all_species))] 
+
+species_names %in% unique(natura_v32_other_species$OTHER_SPECIES_NAME)
 
 ## GBIF retrieve data for all arthropod species that have been assessed in IUCN
 ### NOT run takes time. 
