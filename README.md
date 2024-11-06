@@ -11,14 +11,6 @@ gawk -F"," '(NR>1){a[$3]++}END{for (i in a){print i "\t" a[i]}}' points_data.csv
 
 614 species with points data with 753110 occurrences.
 
-
-
-## Favourable Reference Values - FRVs
-
-The paper: *Defining applying the concept of Favourable Reference Values for species and habitats*
-defines the FRVs.
-
-
 ## NECCA database schema
 
 It is under development from AUTH.
@@ -69,3 +61,32 @@ Hirudo verbana
 
 Endemic species and critically endangered are also studied in order to include
 them in future analyses.
+
+## Data retrieval
+
+### GBIF database 
+
+Here we retrieve all the occurrences of the species from GBIF.
+
+
+
+## Spatial analysis
+
+### Favourable Reference Values - FRVs
+
+The paper: *Defining applying the concept of Favourable Reference Values for species and habitats*
+defines the FRVs.
+
+### MaxEnt
+
+The following variables are used mostly: 
+* Altitude
+* Slope
+* Aspect
+* Annual Mean Temperature
+* Temperature Seasonality
+* Mean Temp of Wettest Quarter
+* Annual Precipitation
+* Precipitation Seasonality
+* Precipitation of Warmest Quarter
+
