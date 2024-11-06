@@ -62,6 +62,18 @@ Hirudo verbana
 Endemic species and critically endangered are also studied in order to include
 them in future analyses.
 
+## Natura2000
+
+The MS access database has the schema of EEA Natura2000 in access format.
+
+To retrieve each table run the following 
+
+```
+mdb-export -d "\t" Natura2000DB_V32.mdb other_species > Natura2000DB_V32_other_species.tsv
+```
+
+The [EEA Natura2000 data](https://www.eea.europa.eu/data-and-maps/data/natura-14/natura-2000-tabular-data-12-tables/#SPECIES).
+
 ## Data retrieval
 
 ### GBIF database 
