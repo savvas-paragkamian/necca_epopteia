@@ -133,6 +133,15 @@ invertebrates_not_everywhere <- species_names[which(!(species_names %in% all_spe
 
 species_names %in% unique(natura_v32_other_species$OTHER_SPECIES_NAME)
 
+## Species from excel statistics
+
+natura_v32_all_species_excel <- natura_v32_all_species |>
+    filter(SPECIES_NAME %in% species_names) |>
+    group_by(SPECIES_NAME) |>
+    summarise(n_sites=n(),SITE_CODE=str_c(SITE_CODE, collapse = ","))
+
+write_delim(natura_v32_all_species_excel, "../results/natura_v32_all_species_excel.tsv", delim="\t")
+
 ## GBIF retrieve data for all arthropod species that have been assessed in IUCN
 ### NOT run takes time. 
 gbif_species <- get_gbifid(species_names,ask=F)
