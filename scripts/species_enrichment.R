@@ -33,7 +33,9 @@ hellenic_borders_shp <- sf::st_read("../spatial_data/hellenic_borders/hellenic_b
 
 invertebrates_92_43 <- readxl::read_excel("../data/invertebrates_92_43.xlsx", skip=2, col_names=F)
 
-species_names <- unique(invertebrates_92_43$...3) 
+colnames(invertebrates_92_43) <- c("no","area","SPECIES_NAME","SPECIES_ID","ORDER","CLASS","PRIORITY","ANNEX_II","ANNEX_IV","ANNEX_V","KD","POPULATION_TREND","POPULATION_SIZE_UNIT","OCCURRENCE","SD")
+
+species_names <- unique(invertebrates_92_43$SPECIES_NAME) 
 
 #species_names <- c("Apatura metis",
 #                   "Astacus astacus",
@@ -84,8 +86,10 @@ natura_v32_other_species <- read_delim("../data/Natura2000DB_V32_other_species.t
 
 groups_df <- data.frame(SPECIES_GROUP=c("R","B","A","M","I","F","P"),
                     groups_names=c("Reptiles", "Birds", "Amphibians", "Mammals", "Invertebrates", "Fish", "Plants"))
+site_types_df <- data.frame(SITE_TYPE=c("A","B","C"), SITE_TYPE_NAME=c("SPAs","SCIs_SACs", "SPAs_and_SCIs_SACs"))
 
-## Descriptives 
+################################ Descriptives ###################################
+##  
 all_species <- unique(c(unique(natura_v32_species$SPECIES_NAME),unique(natura_v32_other_species$OTHER_SPECIES_NAME)))
 
 natura_v32_species_sum <- natura_v32_species |> 
@@ -99,6 +103,7 @@ colnames(natura_v32_other_species_sum) <- colnames(natura_v32_species_sum)
 natura_v32_all_species <- rbind(natura_v32_other_species_sum, natura_v32_species_sum) |>
     distinct()
 
+### species
 groups_species_summary <- natura_v32_all_species |>
     distinct(SPECIES_NAME, SPECIES_GROUP) |>
     group_by(SPECIES_GROUP) |> 
@@ -116,8 +121,6 @@ invertebrates_all_natura_summary <- invertebrates_all |>
 invertebrates_all_natura_summary_region <- invertebrates_all_natura_summary |>
     group_by(REGION_NAME) |>
     summarise(n_species=sum(n_species), n_sites=n())
-
-
 
 ### regions
 ## some sites are in multiple regions 
@@ -142,7 +145,107 @@ natura_v32_all_species_excel <- natura_v32_all_species |>
 
 write_delim(natura_v32_all_species_excel, "../results/natura_v32_all_species_excel.tsv", delim="\t")
 
-## GBIF retrieve data for all arthropod species that have been assessed in IUCN
+### sites
+
+groups_sites_summary <- natura_v32_all_species |>
+    distinct(SITE_CODE, SPECIES_GROUP,SPECIES_NAME) |>
+    group_by(SITE_CODE,SPECIES_GROUP) |> 
+    summarise(n_species=n(),
+              species_names=str_c(SPECIES_NAME,collapse = ","),
+              .groups="keep") |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df)
+
+write_delim(groups_sites_summary,
+            "../results/natura_groups_summary_all.tsv",
+            delim="\t")
+
+groups_sites_summary_invertebrates <- groups_sites_summary |>
+    filter(SPECIES_GROUP=="I")
+
+write_delim(groups_sites_summary_invertebrates,
+            "../results/natura_groups_summary_invertebrates.tsv",
+            delim="\t")
+
+#### sites
+groups_site_type_summary <- natura_v32_all_species |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME, SPECIES_GROUP,SITE_CODE) |>
+    left_join(groups_df) |>
+    group_by(SITE_TYPE_NAME,groups_names) |>
+    summarise(n_sites=n(), .groups="keep") 
+
+groups_site_type_sites_summary_all <- natura_v32_all_species |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME, SITE_CODE) |>
+    group_by(SITE_TYPE_NAME) |>
+    summarise(n_sites=n()) |>
+    mutate(groups_names="All") |>
+    rbind(groups_site_type_summary)
+
+#### type species
+groups_site_type_species_summary <- natura_v32_all_species |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME, SPECIES_GROUP,SPECIES_NAME) |>
+    left_join(groups_df) |>
+    group_by(SITE_TYPE_NAME,groups_names) |>
+    summarise(n_species=n(), .groups="keep") 
+
+groups_site_type_species_summary_all <- natura_v32_all_species |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME,SPECIES_NAME) |>
+    group_by(SITE_TYPE_NAME) |>
+    summarise(n_species=n()) |>
+    mutate(groups_names="All") |>
+    rbind(groups_site_type_species_summary)
+
+
+### species from annex II
+groups_sites_invertebrates <- groups_sites_summary |>
+    filter(SPECIES_GROUP=="I")
+
+species_annex_II <- invertebrates_92_43 |>
+    filter(!is.na(ANNEX_II))
+
+groups_site_type_species_annex_II <- natura_v32_all_species |>
+    filter(SPECIES_NAME %in% species_annex_II$SPECIES_NAME) |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME, SPECIES_GROUP,SPECIES_NAME) |>
+    mutate(groups_names="Invertebrates_annex_II") |>
+    group_by(SITE_TYPE_NAME,groups_names) |>
+    summarise(n_species=n(), .groups="keep") 
+
+groups_site_type_annex_II_summary <- natura_v32_all_species |>
+    filter(SPECIES_NAME %in% species_annex_II$SPECIES_NAME) |>
+    left_join(natura_v32_site) |>
+    left_join(site_types_df) |>
+    distinct(SITE_TYPE_NAME, SPECIES_GROUP,SITE_CODE) |>
+    mutate(groups_names="Invertebrates_annex_II") |>
+    group_by(SITE_TYPE_NAME,groups_names) |>
+    summarise(n_sites=n(), .groups="keep") 
+
+natura_sites_groups_species_annex_II <- groups_site_type_species_annex_II |>
+    left_join(groups_site_type_annex_II_summary,
+    by=c("SITE_TYPE_NAME","groups_names"))
+
+### sites and species together
+
+natura_sites_groups_species_summary <- groups_site_type_sites_summary_all |>
+    left_join(groups_site_type_species_summary_all,
+              by=c("SITE_TYPE_NAME","groups_names")) |>
+    rbind(natura_sites_groups_species_annex_II)
+
+write_delim(natura_sites_groups_species_summary,
+            "../results/natura_sites_groups_species_summary.tsv",
+            delim="\t")
+
+################################ Enrichment ###################################
+# GBIF retrieve data for all arthropod species that have been assessed in IUCN
 ### NOT run takes time. 
 gbif_species <- get_gbifid(species_names,ask=F)
 
