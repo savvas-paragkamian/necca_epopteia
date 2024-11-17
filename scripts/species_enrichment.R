@@ -283,20 +283,23 @@ write_delim(gnr_species, "../results/gnr_species_names.tsv", delim="\t")
 gbif_taxon_keys <- as.numeric(na.omit(species_gbif_df$gbifid.ids))
 
 ## run once to request the download from the server
-#occ_download(
-#pred_in("taxonKey", gbif_taxon_keys), # important to use pred_in
-#pred("hasCoordinate", TRUE),
-#pred("hasGeospatialIssue", FALSE),
-#format = "SIMPLE_CSV"
-#)
+occ_download(
+pred_in("taxonKey", gbif_taxon_keys), # important to use pred_in
+pred("hasCoordinate", TRUE),
+pred("hasGeospatialIssue", FALSE),
+format = "SIMPLE_CSV"
+)
 
 # to check the status of the download
+# This is for the species of annex II 
 # occ_download_wait('0026745-241024112534372') 
+# the key for the gbif download of 268 invertegrate species 
+# is 0018673-241107131044228 
 
-gbif_species_occ <- occ_download_get('0026745-241024112534372') |>
+gbif_species_occ <- occ_download_get('0018673-241107131044228') |>
     occ_download_import()
 
-write_delim(gbif_species_occ, "../results/gbif_species_occ.tsv", delim="\t")
+write_delim(gbif_species_occ, "../results/gbif_invertebrate_species_occ.tsv", delim="\t")
 
 
 gbif_species_occ_sf <- gbif_species_occ |> 
