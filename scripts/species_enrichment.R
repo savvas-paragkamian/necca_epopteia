@@ -93,7 +93,7 @@ site_types_df <- data.frame(SITE_TYPE=c("A","B","C"), SITE_TYPE_NAME=c("SPAs","S
 all_species <- unique(c(unique(natura_v32_species$SPECIES_NAME),unique(natura_v32_other_species$OTHER_SPECIES_NAME)))
 
 natura_v32_species_sum <- natura_v32_species |> 
-    distinct(SPECIES_NAME,SPECIES_GROUP,SITE_CODE) |>
+    distinct(SPECIES_NAME,SPECIES_GROUP,SITE_CODE) 
 
 natura_v32_other_species_sum <- natura_v32_other_species |> 
     distinct(OTHER_SPECIES_NAME,OTHER_SPECIES_GROUP, SITE_CODE)
@@ -121,6 +121,9 @@ invertebrates_all_natura_summary <- invertebrates_all |>
 invertebrates_all_natura_summary_region <- invertebrates_all_natura_summary |>
     group_by(REGION_NAME) |>
     summarise(n_species=sum(n_species), n_sites=n())
+
+invertebrates_all_species <- invertebrates_all |>
+    distinct(SPECIES_NAME)
 
 ### regions
 ## some sites are in multiple regions 
@@ -247,11 +250,12 @@ write_delim(natura_sites_groups_species_summary,
 ################################ Enrichment ###################################
 # GBIF retrieve data for all arthropod species that have been assessed in IUCN
 ### NOT run takes time. 
+species_names <- as.character(invertebrates_all_species$SPECIES_NAME)
 gbif_species <- get_gbifid(species_names,ask=F)
 
 
 species_gbif_df <- data.frame(sci_name=species_names, gbifid=gbif_species)
-write_delim(species_gbif_df, "../results/species_gbif.tsv", delim="\t")
+write_delim(species_gbif_df, "../results/species_gbif_invertebrates.tsv", delim="\t")
 #### takes even more time!!!
 classification_species <- classification(species_gbif_df$gbifid.ids, db = 'gbif')
 
