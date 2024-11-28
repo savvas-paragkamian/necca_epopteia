@@ -102,3 +102,10 @@ The following variables are used mostly:
 * Precipitation Seasonality
 * Precipitation of Warmest Quarter
 
+
+### DEM
+
+* digital elevation model over Europe (EU-DEM) [eurostat DEM](https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD)
+* slope, aspect
+
+
