@@ -30,6 +30,14 @@ gtb_layers <- st_layers(dir_path)
 # Read all GTB files into a list of sf objects
 gtb_data_list <- purrr::map(gtb_layers$name,~st_read(dsn=dir_path,layer=.))
 
+
+for (i in 1:length(gtb_data_list)) {
+
+    print(i)
+    write_delim(gtb_data_list[[i]],paste0("../data/gtb_data_",i,".tsv"),delim="\t")
+
+}
+
 # Optionally, combine them into a single sf object if structures are the same
 ## do not run. PROTOCOL_1A, GENIKES_INFO, PROTOCOL_1A__ATTACH, GENIKES_INFO__ATTACH
 ## don't have CRS
