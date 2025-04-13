@@ -106,9 +106,21 @@ Hirudo verbana
 Endemic species and critically endangered are also studied in order to include
 them in future analyses.
 
+### IUCN Redlist
+
+Search in the website for the following:
+Taxonomy: Annelida - PhylumRemoveArthropoda - PhylumRemoveCnidaria - PhylumRemoveEchinodermata - PhylumRemoveMollusca - PhylumRemovePorifera - PhylumRemove
+Land Regions: Greece
+Include: Species
+
+Didn't have any points data for the invertrebrate species of art 17.
 
 
-### IUCN Greece 
+Another search with redlist_species_data_f4d05b4d-bdbd-4b10-8c67-1523dffd9d0e id.
+
+Geographical Scope: Global
+Land Regions: Greece
+Include: Species
 
 All the data available from iunc Search on 2024-10-30 at 08:47:29
 
@@ -118,11 +130,22 @@ gawk -F"," '(NR>1){a[$3]++}END{for (i in a){print i "\t" a[i]}}' points_data.csv
 
 614 species with points data with 753110 occurrences.
 
+This database doesn't have any occurrences of the species of interest. 
 
 ### GBIF database 
 
 Here we retrieve all the occurrences of the species from GBIF.
 
+### Edaphobase 2.0
+The download is manual with a registered account. Once the download is finished
+the user can filter based on species or country or some other field. Here we first
+filtered with country code of Greece to create a new file to further analyse it in R script.
+
+```
+gawk -F";" '(NR==1 || $7~"Greece"){print $0}' 2025-02-26-edaphobase-export.csv > 2025-02-26-edaphobase-export_GR.csv
+```
+
+This database doesn't have any occurrences of the species of interest. 
 
 ## Spatial analysis
 
