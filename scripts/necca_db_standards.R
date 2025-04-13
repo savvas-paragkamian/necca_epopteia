@@ -20,7 +20,7 @@ library(units)
 ###
 wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
-# NECCA gtb
+######################## NECCA gtb ################################
 # Define the directory containing GTB files
 dir_path <- "../data/necca_internal_extract.gdb"
 
