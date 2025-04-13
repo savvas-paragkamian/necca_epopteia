@@ -11,7 +11,7 @@ the period 10-2024 until 07-2025.
 
 * [Scripts](#scripts)
 * [Species enrichment](#species-enrichment)
-* [Spatial analysis](#spatial-data)
+* [Spatial analysis](#spatial-analysis)
 * [Favourable Reference Values](#favourable-reference-values)
 * [Natura2000 targets](#natura2000-targets)
 * [Data validation and quality control](#data-validation-and-quality-control)
