@@ -11,9 +11,11 @@ the period 10-2024 until 07-2025.
 
 * [Scripts](#scripts)
 * [Species enrichment](#species-enrichment)
-* [Spatial data](#spatial-data)
-* [Favourate Reference Values](#favourate-reference-values)
+* [Spatial analysis](#spatial-data)
+* [Favourable Reference Values](#favourable-reference-values)
 * [Natura2000 targets](#natura2000-targets)
+* [Data validation and quality control](#data-validation-and-quality-control)
+* [NECCA database](#necca-database)
 * [Software](#software)
 * [Licence](#licence)
 
@@ -164,7 +166,6 @@ The [EEA Natura2000 data](https://www.eea.europa.eu/data-and-maps/data/natura-14
 
 ### Slope
 
-
 ## Favourable Reference Values
 
 The paper: *Defining applying the concept of Favourable Reference Values for species and habitats*
@@ -185,8 +186,9 @@ The following variables are used mostly:
 
 ## Natura2000 targets
 
+## Data validation and quality control
 
-## NECCA database schema
+## NECCA database
 
 It is under development from AUTH. There is a script under development for the 
 standardisation of data in order to be uploaded to NECCA database.
