@@ -17,6 +17,20 @@ the period 10-2024 until 07-2025.
 * [Software](#software)
 * [Licence](#licence)
 
+## Scripts
+
+The scripts in this repository are (with the order of execution):
+1. species_enrichment.R, species info gathering and homogenisation
+2. spatial_analysis.R, spatial data trimming and final enrichment of species occurrences
+3. frvs_invertebrates_gr.R
+4. N2000_targets_invertebrates_gr.R
+
+The script *data_validation_qc.R* is for the data validation of 
+the data from the current samplings in order to find errors prior to
+submission.
+
+The script *necca_db_standards.R* aims to construct all the data 
+compliled from this work in a compatible form with the NECCA database.
 
 ## Species enrichment
 
