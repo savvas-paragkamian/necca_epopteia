@@ -32,48 +32,64 @@ colnames(invertebrates_92_43) <- c("no","area","SPECIES_NAME","SPECIES_ID","ORDE
 
 species_names <- unique(invertebrates_92_43$SPECIES_NAME) 
 
-#species_names <- c("Apatura metis",
-#                   "Astacus astacus",
-#                   "Austropotamobius torrentium",
-#                   "Bolbelasmus unicornis",
-#                   "Buprestis splendens",
-#                   "Catopta thrips",
-#                   "Cerambyx cerdo",
-#                   "Coenagrion ornatum",
-#                   "Cordulegaster heros",
-#                   "Dioszeghyana schmidtii",
-#                   "Eriogaster catax",
-#                   "Euphydryas aurinia",
-#                   "Euplagia quadripunctaria",
-#                   "Hyles hippophaes",
-#                   "Lindenia tetraphylla",
-#                   "Lucanus cervus",
-#                   "Lycaena dispar",
-#                   "Maculinea arion",
-#                   "Ophiogomphus cecilia",
-#                   "Papilio alexanor",
-#                   "Paracaloptenus caloptenoides",
-#                   "Parnassius apollo",
-#                   "Parnassius mnemosyne",
-#                   "Polyommatus eroides",
-#                   "Probaticus subrugosus",
-#                   "Proserpinus proserpina",
-#                   "Pseudophilotes bavius",
-#                   "Rhysodes sulcatus",
-#                   "Rosalia alpina",
-#                   "Stenobothrus eurasius",
-#                   "Stylurus flavipes",
-#                   "Unio crassus",
-#                   "Unio elongatulus",
-#                   "Vertigo angustior",
-#                   "Vertigo moulinsiana",
-#                   "Zerynthia polyxena",
-#                   "Morimus asper funereus",
-#                   "Osmoderma eremita Complex",
-#                   "Hirudo verbana")
-
+#### this list contains species names from multiple versions of Monitoring, EPOPTEIA I, EPOPTEIA II. 
+species_names_combined <- c(
+  "Apatura metis",
+  "Astacus astacus",
+  "Austropotamobius torrentium",
+  "Bolbelasmus unicornis",
+  "Buprestis splendens",
+  "Callimorpha (Euplagia, Panaxia) quadripunctaria",
+  "Catopta thrips",
+  "Cerambyx cerdo",
+  "Coenagrion ornatum",
+  "Cordulegaster heros",
+  "Dioszeghyana schmidtii",
+  "Eriogaster catax",
+  "Euphydryas (Eurodryas, Hypodryas) aurinia",
+  "Euphydryas aurinia",
+  "Euplagia quadripunctaria",
+  "Hirudo medicinalis",
+  "Hirudo verbana",
+  "Hyles hippophaes",
+  "Lindenia tetraphylla",
+  "Lucanus cervus",
+  "Lycaena dispar",
+  "Maculinea arion",
+  "Morimus asper funereus",
+  "Morimus funereus",
+  "Ophiogomphus cecilia",
+  "Osmoderma eremita",
+  "Osmoderma eremita Complex",
+  "Papilio alexanor",
+  "Paracaloptenus caloptenoides",
+  "Parnassius apollo",
+  "Parnassius mnemosyne",
+  "Polyommatus eroides",
+  "Probaticus subrugosus",
+  "Proserpinus proserpina",
+  "Pseudophilotes bavius",
+  "Rhysodes sulcatus",
+  "Rosalia alpina",
+  "Stenobothrus (Stenobothrodes) eurasius",
+  "Stenobothrus eurasius",
+  "Stylurus flavipes",
+  "Unio crassus",
+  "Unio elongatulus",
+  "Vertigo angustior",
+  "Vertigo moulinsiana",
+  "Zerynthia polyxena"
+)
 
 ################################ Enrichment ###################################
+
+####################### edaphobase ########################
+edaphobase_gr <- read_delim("../data/2025-02-26-edaphobase-export_GR.csv", delim=";")
+
+# searching in the df multiple tokens using grepl
+edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, function(p) grepl(p, edaphobase_gr$`Valid taxon`,ignore.case = T))), ]
+
+######################## GBIF ########################
 # GBIF retrieve data for all arthropod species that have been assessed in IUCN
 ### NOT run takes time. 
 species_names <- as.character(invertebrates_all_species$SPECIES_NAME)
@@ -230,60 +246,6 @@ all_points <- rbind(points_inside, points_outside)
 ############################################################################################
 #################### Species Occurrences Data Homogenisation ###############################
 ############################################################################################
-#### Species list
-invertebrates_92_43 <- readxl::read_excel("../data/invertebrates_92_43.xlsx", skip=2, col_names=F)
-
-colnames(invertebrates_92_43) <- c("no","area","SPECIES_NAME","SPECIES_ID","ORDER","CLASS","PRIORITY","ANNEX_II","ANNEX_IV","ANNEX_V","KD","POPULATION_TREND","POPULATION_SIZE_UNIT","OCCURRENCE","SD")
-species_names <- unique(invertebrates_92_43$SPECIES_NAME) 
-
-#### this list contains species names from multiple versions of Monitoring, EPOPTEIA I, EPOPTEIA II. 
-species_names_combined <- c(
-  "Apatura metis",
-  "Astacus astacus",
-  "Austropotamobius torrentium",
-  "Bolbelasmus unicornis",
-  "Buprestis splendens",
-  "Callimorpha (Euplagia, Panaxia) quadripunctaria",
-  "Catopta thrips",
-  "Cerambyx cerdo",
-  "Coenagrion ornatum",
-  "Cordulegaster heros",
-  "Dioszeghyana schmidtii",
-  "Eriogaster catax",
-  "Euphydryas (Eurodryas, Hypodryas) aurinia",
-  "Euphydryas aurinia",
-  "Euplagia quadripunctaria",
-  "Hirudo medicinalis",
-  "Hirudo verbana",
-  "Hyles hippophaes",
-  "Lindenia tetraphylla",
-  "Lucanus cervus",
-  "Lycaena dispar",
-  "Maculinea arion",
-  "Morimus asper funereus",
-  "Morimus funereus",
-  "Ophiogomphus cecilia",
-  "Osmoderma eremita",
-  "Osmoderma eremita Complex",
-  "Papilio alexanor",
-  "Paracaloptenus caloptenoides",
-  "Parnassius apollo",
-  "Parnassius mnemosyne",
-  "Polyommatus eroides",
-  "Probaticus subrugosus",
-  "Proserpinus proserpina",
-  "Pseudophilotes bavius",
-  "Rhysodes sulcatus",
-  "Rosalia alpina",
-  "Stenobothrus (Stenobothrodes) eurasius",
-  "Stenobothrus eurasius",
-  "Stylurus flavipes",
-  "Unio crassus",
-  "Unio elongatulus",
-  "Vertigo angustior",
-  "Vertigo moulinsiana",
-  "Zerynthia polyxena"
-)
 ##### Gbif data
 
 gbif_species_occ <- read_delim("../results/gbif_species_occ.tsv", delim="\t") |>
@@ -354,8 +316,8 @@ E1X_DB_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_
                                     sheet="Δείγματα Ασπόνδυλων",
                                     col_names=T) |> slice(-1)
 
-E1X_DB_samples_data$decimalLatitude <- as.numeric(deigmata_data_previous$`Γεωγραφικό Πλάτος (WGS84) Αρχη`)
-E1X_DB_samples_data$decimalLongitude <- as.numeric(deigmata_data_previous$`Γεωγραφικό Μήκος (WGS84) Αρχή`)
+E1X_DB_samples_data$decimalLatitude <- as.numeric(E1X_DB_samples_data$`Γεωγραφικό Πλάτος (WGS84) Αρχη`)
+E1X_DB_samples_data$decimalLongitude <- as.numeric(E1X_DB_samples_data$`Γεωγραφικό Μήκος (WGS84) Αρχή`)
 
 E1X_DB_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_ΑΣΠΟΝΔΥΛΑ_20241204.xlsx",
                                     sheet="Είδη",
@@ -370,6 +332,10 @@ E1X_DB_all <- E1X_DB_species_data |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
 
+## these data have all species that the researchers were looking for
+## but they have found the species that have individualCount more than 0!
+## so we are filtering them.
+##
 E1X_DB_select <- E1X_DB_all |>
     filter(individualCount>0)
 
@@ -440,6 +406,7 @@ for (i in seq_along(species_with_data)){
                 alpha=0.8,
                 show.legend=T) +
         coord_sf(crs="WGS84") +
+        ggtitle(paste(species_with_data[i]))+
         theme_bw()+
         theme(axis.title=element_blank(),
               axis.text=element_text(colour="black"),
