@@ -22,7 +22,19 @@ the period 10-2024 until 07-2025.
 ## Scripts
 
 The scripts in this repository are (with the order of execution):
-1. species_enrichment.R, species info gathering and homogenisation
+1. species_enrichment.R
+
+This script facilitates species info and occurrences gathering and homogenisation from multiple
+sources for Greek invertebrates. It starts by importing data from various sources,
+including GBIF, previous monitoring data (E1X MDPP, E1X DB,  E1X reference data),
+IUCN redlist, NECCA redlist and other sources.
+To ensure consistency across datasets, the script standardizes column names 
+based on Darwin Core (e.g., renaming `decimalLongitude`, `decimalLatitude`) and filters out incomplete records.
+The main output of the is species_occurrences_art17_invertebrates.tsv file which 
+contains all data from the aformentioned resources.
+For visualization, the script generates maps for each species, with points colored
+based on their dataset source.
+
 2. spatial_analysis.R, spatial data trimming and final enrichment of species occurrences
 3. frvs_invertebrates_gr.R
 4. N2000_targets_invertebrates_gr.R
