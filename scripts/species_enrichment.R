@@ -194,6 +194,23 @@ Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_202
     mutate(datasetName = "Invertebrates_records_Olga") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
+########################### NECCA Redlist ###########################
+
+necca_redlist_points <- st_read("../data/necca_redlist/points_invertebrates.gpkg")
+
+necca_redlist_points_df <- necca_redlist_points |>
+    st_cast("POINT") %>% 
+    mutate(decimalLongitude = st_coordinates(.)[, 1],
+           decimalLatitude = st_coordinates(.)[, 2]) |>
+    st_drop_geometry() |>
+    rename("species"="sci_name") |>
+    mutate(datasetName = "NECCA_redlist") |>
+    mutate(individualCount=NA) |>
+    mutate(basisOfRecord="MATERIAL_SAMPLE")
+
+necca_redlist_polygons <- st_read("../data/necca_redlist/polygons_invertebrates.gpkg")
+
+
 ########################### IUCN Redlist ###########################
 #
 iucn_summary <- read_delim("../data/redlist_species_data_c7359df6-ef0b-468c-b295-32816a14f56b/simple_summary.csv", delim=",")
@@ -252,7 +269,8 @@ iucn_art17_invert_all <- iucn_art17_invert_summary |>
               ) |>
     left_join(iucn_art17_invert_threats,
               by=c("scientificName"="scientificName")
-              )
+              ) |>
+    mutate(datasetName = "IUCN_redlist") 
 
 write_delim(iucn_art17_invert_all, "../results/iucn_art17_invert_all.tsv", delim="\t")
 ############################# Species data integration ###################
@@ -268,6 +286,7 @@ species_occurrences_art17_invertebrates <- list(gbif_species_occ_gr,
                                     E1X_MDPP_2014_2024_all,
                                     E1X_DB_select,
                                     E1X_DB_ref_all,
+                                    necca_redlist_points_df,
                                     Invertebrates_records_Olga) |>
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
     bind_rows() 
@@ -285,9 +304,21 @@ species_samples_art17_sf <- species_samples_art17 |>
 
 species_with_data <- unique(species_samples_art17_sf$species)
 
+datasets_colors <- c(
+                     "Gbif"="#74B375",
+                     "NECCA_redlist"="#B31319",
+                     "E1X_MDPP_2014_2024"="#FDF79C",
+                     "E1X_DB"="#2BA09F",
+                     "E1X_DB_references"="#141D43",
+                     "Invertebrates_records_Olga"="#F85C29"
+                     )
+
+
 for (i in seq_along(species_with_data)){
     species_occurrences <- species_samples_art17_sf |>
         filter(species==species_with_data[i])
+
+    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
     print(species_with_data[i])
 
     
@@ -301,6 +332,7 @@ for (i in seq_along(species_with_data)){
                 alpha=0.8,
                 show.legend=T) +
         coord_sf(crs="WGS84") +
+        scale_color_manual(values=dataset_colors_f)+
         ggtitle(paste(species_with_data[i]))+
         theme_bw()+
         theme(axis.title=element_blank(),
@@ -318,9 +350,5 @@ for (i in seq_along(species_with_data)){
            device="png")
 
 }
-
-
-
-
 
 
