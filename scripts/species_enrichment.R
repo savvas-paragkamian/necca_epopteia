@@ -341,7 +341,7 @@ for (i in seq_along(species_with_data)){
               legend.position = "bottom",
               legend.box.background = element_blank())
     
-    ggsave(paste0("../figures/map_", species_with_data[i], "_occurrences.png", sep=""), 
+    ggsave(paste0("../figures/species/map_", species_with_data[i], "_occurrences.png", sep=""), 
            plot=species_gr_map, 
            height = 20, 
            width = 20,
