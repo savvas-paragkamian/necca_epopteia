@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/env Rscript
 
 ## Script name: species_enrichment.R
 ##
@@ -102,9 +102,16 @@ ymin <- 34.80202
 xmax <- 29.64306
 ymax <- 41.7485
 
-gbif_species_occ_gr <- gbif_species_occ |>
-    filter(decimalLongitude > 19.37359 & decimalLongitude<29.64306,
-           decimalLatitude>34.80202 & decimalLatitude < 41.7485 )
+gbif_species_occ_sf <- gbif_species_occ |>
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
+             remove=F,
+             crs="WGS84")
+
+print("gbif")
+gbif_species_occ_gr <- gbif_species_occ_sf |>
+    filter(lengths(st_intersects(geometry, greece_regions)) > 0) |>
+    st_drop_geometry()
+print("end gbif")
 
 ######## NECCA compilation of previous Monitoring Data not included in ENVECO database
 E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024.xlsx",
@@ -298,7 +305,7 @@ species_samples_art17 <- species_occurrences_art17_invertebrates |>
 
 species_samples_art17_sf <- species_samples_art17 |>
     filter(!is.na(decimalLongitude)) |>
-    st_as_sf(coords=c("decimalLatitude","decimalLongitude"),
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
 
