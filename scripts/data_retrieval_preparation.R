@@ -153,46 +153,50 @@ ggsave("../figures/gbif_species_gr_map.png",
 
 ## function to crop tif rasters based on bbox of other shapefile
 ## and make it wgs84 <- "EPSG:4326" 
-crop_raster_by_bbox <- function(raster_path, bbox_sf, output_path) {
+
+#raster_path <- eurodem_file
+#bbox_sf <- bbox_polygon
+#output_path <- eurodem_gr_d
+crop_raster_by_shp <- function(raster_path, shp, output_path) {
     # Read the raster
     raster_tmp <- rast(raster_path)
+    bbox_polygon <- st_as_sf(st_as_sfc(st_bbox(shp)))
     # Check CRS match
     raster_crs <- crs(raster_tmp, proj=TRUE)
     bbox_crs <- st_crs(bbox_sf)$wkt
 
     if (raster_crs != bbox_crs) {
         message("Reprojecting bbox to match raster CRS...")
-        bbox_sf <- st_transform(bbox_sf, crs = raster_crs)
+        bbox_sf <- st_transform(bbox_sf, crs = st_crs(raster_crs))
     }
     # Convert bbox to SpatVector for terra cropping
-    bbox_vect <- vect(bbox_sf)
+    #bbox_vect <- vect(bbox_sf)
     #Crop raster
-    cropped_raster <- crop(raster_tmp, bbox_vect)
+    cropped_raster <- crop(raster_tmp, bbox_sf)
     # project to WGS84
     wgs84 <- "EPSG:4326"
     if (crs(cropped_raster) != wgs84) {
         cropped_raster <- project(cropped_raster, wgs84)
     }
+    mask_raster <- mask(cropped_raster, shp)
 
     output_path <- paste0(output_path,"crop_",basename(raster_path),sep="")
   
     # Save the cropped raster
-    terra::writeRaster(cropped_raster, output_path, overwrite = TRUE)
+    terra::writeRaster(mask_raster, output_path, overwrite = TRUE)
   
     # Clean up
-    rm(raster_tmp, cropped_raster)
+    rm(raster_tmp, cropped_raster, mask_raster)
     gc()
   
     message("Saved cropped raster to: ", output_path)
 }
 
-
+####### World clim #########
 world_clim_directory <- "/Users/talos/Documents/spatial_data/world_clim/wc2.1_30s_bio/"
 output_directory <- "/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/world_clim_greece/"
 
 world_clim_files <- list.files(world_clim_directory, pattern = "\\.tif$", full.names = TRUE)
-
-bbox_polygon <- st_as_sf(st_as_sfc(st_bbox(greece_regions)))
 
 for (f in world_clim_files) {
     
@@ -200,7 +204,7 @@ for (f in world_clim_files) {
         
         #read_raster
         path_raster <- f
-        crop_raster_by_bbox(path_raster,bbox_polygon,output_directory)
+        crop_raster_by_shp(path_raster,greece_regions,output_directory)
         
         rm(path_raster,raster_tmp,crete_raster,output_raster)
 
@@ -211,11 +215,39 @@ for (f in world_clim_files) {
     }
 }
 
+################ HILDA plus
 
+hilda_directory <- "/Users/talos/Documents/spatial_data/hildap_vGLOB-1.0_geotiff_wgs84/hildap_GLOB-v1.0_lulc-states/"
+output_directory <- "/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/hilda_greece/"
+
+hilda_directory_files <- list.files(hilda_directory, pattern = "\\.tif$", full.names = TRUE)
+
+
+for (f in hilda_directory_files) {
+    
+    if (grepl("*.tif$", f)) {
+        
+        #read_raster
+        path_raster <- f
+        crop_raster_by_shp(path_raster,greece_regions,output_directory)
+        
+        rm(path_raster,raster_tmp,crete_raster,output_raster)
+
+    }else{
+        
+        print(f, " not a tif")
+        next
+    }
+}
 #### EU DEM
 ###
 
-eu_dem <- rast("/Users/talos/Documents/spatial_data/EUD_CP_SLOP_mosaic/eudem_slop_3035_europe.tif")
+
+eurodem_file <- "/Users/talos/Documents/spatial_data/euro-dem-tif/data/eurodem/eurodem.tif"
+eurodem_gr_d <- "../spatial_data/eurodem_gr"
+crop_raster_by_bbox(eurodem_file,bbox_polygon,eurodem_gr_d)
+
+eu_dem <- rast(eurodem_file)
 
 crete_raster <- terra::crop(raster_tmp, bbox_polygon)
 crete_raster <- terra::project(crete_raster, wgs84)
