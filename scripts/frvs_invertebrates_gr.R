@@ -26,6 +26,12 @@ gr_1km <- sf::st_read("../spatial_data/eea_1km/gr_1km.shp") |>
     st_transform(., crs="WGS84")
 
 ########################### Load Species Data ###########################
+### Species occurrences enriched ######
+species_occurrences_art17_invertebrates <- read_delim("../results/species_occurrences_art17_invertebrates.tsv",delim="\t")
+
+
+sspecies_dist_national_rep <- sf::st_read("../spalia_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
+species_dist_national_rep_sens <- sf::st_read("../spalia_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 
 
 ########################## Flowchart for FRVs ##########################
@@ -38,6 +44,5 @@ parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Dis
 species_samples_art17_parnasious <- species_samples_art17_sf |>
     filter(species=="Parnassius apollo") 
 
-gbif_parnasious_gr <- st_intersection(gbif_parnasious,greece_regions)
 
 
