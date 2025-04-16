@@ -240,21 +240,41 @@ for (f in hilda_directory_files) {
     }
 }
 #### EU DEM
-###
+###https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD
+# crop the eu dem file, it is 20gb.
+eu_dem_file <- "/Users/talos/Downloads/EU_DEM_mosaic_5deg/eudem_dem_4258_europe.tif"
+eurodem_gr_d <- "../spatial_data/EU_DEM_mosaic_5deg_gr/"
+crop_raster_by_shp(eu_dem_file,greece_regions,eurodem_gr_d)
+
+# Then reload in different name and change crs
+eu_dem <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_gr.tif")
+
+eu_dem_wgs84 <- terra::project(eu_dem, "EPSG:4326")
+
+terra::writeRaster(eu_dem_wgs84,
+                   "../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif",
+                   overwrite=TRUE)
+
+#### EU dem slope
+eu_dem_slope_file <- "/Users/talos/Downloads/EUD_CP_SLOP_mosaic/eudem_slop_3035_europe.tif"
+
+eu_dem_slope_gr_d <- "../spatial_data/EU_DEM_slope_gr/"
+crop_raster_by_shp(eu_dem_slope_file,greece_regions,eu_dem_slope_gr_d)
+
+# Then reload in different name and change crs
+eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
+# the conversion happened succesfully in the function
+#eu_dem_slope_wgs84 <- terra::project(eu_dem_slope, "EPSG:4326")
+
+#terra::writeRaster(eu_dem_slope_wgs84,
+#                   "../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_slope_4326_gr.tif",
+#                   overwrite=TRUE)
+
+### Ecosystem types of Europe 3.1
+ecosystem_types <- "/Users/talos/Documents/spatial_data/Ecosystem_types_of_Europe_version_3.1_Terrestrial/eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif"
+
+ecosystem_types_gr_d <- "../spatial_data/ecosystem_types_gr/"
+crop_raster_by_shp(ecosystem_types,greece_regions,ecosystem_types_gr_d)
 
 
-eurodem_file <- "/Users/talos/Documents/spatial_data/euro-dem-tif/data/eurodem/eurodem.tif"
-eurodem_gr_d <- "../spatial_data/eurodem_gr"
-crop_raster_by_bbox(eurodem_file,bbox_polygon,eurodem_gr_d)
-
-eu_dem <- rast(eurodem_file)
-
-crete_raster <- terra::crop(raster_tmp, bbox_polygon)
-crete_raster <- terra::project(crete_raster, wgs84)
-output_raster <- paste0(output_directory, "crete_",f,sep="")
-print(output_raster)
-terra::writeRaster(crete_raster, output_raster,overwrite=TRUE)
-
-
-
-
+#ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
