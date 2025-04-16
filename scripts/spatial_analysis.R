@@ -24,9 +24,17 @@ species_occurrences_art17_invertebrates <- read_delim("../results/species_occurr
 
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
 
-#EEA 1km
+### EEA reference grid
 eea_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp")
+eea_1km_wgs <- st_transform(eea_1km,4326)
+
 eea_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp")
+eea_10km_wgs <- st_transform(eea_10km,4326)
+### EU DEM Greece
+eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
+
+### EU DEM Greece slope
+eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
 
 ### World Clim , Bioclim Variables
 ###
@@ -39,11 +47,38 @@ world_clim_list <- lapply(world_clim_files, rast)
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
-#01_Χαρτογράφηση χερσαίων Τ.Ο._EKXA
 
+### Ecosystem Types of Europe 3.1 Terrestrial
+ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
 
+### Vegetation_map_Greece
+## the encoding ENCODING=WINDOWS-1253 helped to see the greek characters
+vegetation_map <- sf::st_read("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.shp",
+                              options = "ENCODING=WINDOWS-1253")
 
+vegetation_map_wgs <- st_transform(vegetation_map,4326)
 
+veg_data <- data.frame(
+  A_VEG_TYPE = c("ΕΛΑ", "ΕΡΛ", "ΠΜΑ", "ΠΛΔ", "ΠΔΑ", "ΠΧΑ", "ΠΚΟ", "ΠΘΑ", "ΚΠΡ",
+                 "ΑΡΚ", "ΟΞΥ", "ΔΡΥ", "ΚΑΣ", "ΣΗΜ", "ΣΦΕ", "ΦΙΛ", "ΦΠΛ", "ΠΑΡ",
+                 "ΕΥΚ", "ΦΟΙ", "ΘΑΜ", "ΦΘΑ", "ΛΙΒ", "ΑΓΟ", "ΟΙΚ", "ΓΚΑ", "ΓΚΕ",
+                 "ΛΧΡ", "ΛΙΜ"),
+  A_VEG_NAME = c("Ελάτη", "Ερυθρελάτη", "Πεύκη μαύρη", "Πεύκη λευκόδερμη", "Πεύκη δασική",
+                 "Πεύκη χαλέπιος", "Πεύκη κουκουναριά", "Πεύκη θαλασσία", "Κυπαρίσσι",
+                 "Άρκευθος", "Οξυά", "Δρύς", "Καστανιά", "Σημύδα", "Σφένδαμος",
+                 "Φιλύρα", "Φυλλοβόλα πλατύφυλλα", "Παραποτάμια βλάστηση", "Ευκάλυπτος",
+                 "Φοίνικας", "Θάμνοι", "Φυλλοβόλοι θάμνοι", "Λιβάδια, αραιά ξυλ. βλάστηση",
+                 "Άγονα", "Οικισμοί", "Γεωργ. καλλιέργειες", "Γεωργ. καλλιέργειες εγκατ.",
+                 "Λοιπές χρήσεις", "Λίμνη"),
+  stringsAsFactors = FALSE
+)
+
+### EUNIS_Habitats_2018 for the Natura2000 areas
+# the same as 01_Χαρτογράφηση χερσαίων Τ.Ο._EKXA
+
+EUNIS_Habitats <- sf::st_read("../spatial_data/EUNIS_Habitats_2018/Habitats_2018/Habitats.shp")
+
+EUNIS_Habitats_wgs <- st_transform(EUNIS_Habitats,4326)
 
 ######### HILDA Greece land use change ##########
 hilda_cat <- data.frame(hilda_id = c("11","22","33","44","55","66","77"),
@@ -163,7 +198,7 @@ for (i in 1:length(hilda_files)){
               common.legend = TRUE,
               legend="bottom") + bgcolor("white")
     
-    ggsave(paste0("../figures/hilda_greece/crete_",raster_name,".png",sep=""), 
+    ggsave(paste0("../figures/hilda_greece/greece_",raster_name,".png",sep=""), 
            plot=fig_hilda, 
            height = 10, 
            width = 25,
