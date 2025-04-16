@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/env Rscript
 
 ## Script name: spatial_analysis.R
 ##
@@ -20,6 +20,13 @@ library(ggpubr)
 ###
 ### Species occurrences enriched ######
 species_occurrences_art17_invertebrates <- read_delim("../results/species_occurrences_art17_invertebrates.tsv",delim="\t")
+
+species_occurrences_art17_sf <- species_occurrences_art17_invertebrates |> 
+    filter(!is.na(decimalLatitude)) |>
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
+             remove=F,
+             crs="WGS84")
+
 ### greece 
 
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
@@ -94,13 +101,71 @@ hilda_cat_v <- c("urban"="#000000",
                  "water"="#1370A1")
 
 
-#### Hilda analysis
+#### Hilda land cover change
 hilda_path <- "../spatial_data/hilda_greece/"
 hilda_id_names <- read_delim(paste0(hilda_path, "hilda_transitions_names.tsv", sep=""), delim="\t")
 hilda_all <- list.files(hilda_path)
 hilda_files <- hilda_all[grepl("*.tif", hilda_all)] 
+hilda_rast_list <- lapply(hilda_files, function(x) rast(paste0(hilda_path,x,sep="")))
+
+########################### Extract data to species occurrences ############
+
+### rasters stack
+
+rasters_list <- list(eu_dem_gr,eu_dem_slope,ecosystem_types_gr) # hilda_rast_list, add later ,world_clim_list
+
+points_sf <- species_occurrences_art17_sf
+
+extract_from_named_rasters <- function(raster_list, points_sf) {
+  if (!all(sapply(raster_list, inherits, "SpatRaster"))) {
+    stop("All items in raster_list must be terra SpatRaster objects.")
+  }
+
+  # Get names of each raster in the list
+  raster_names <- names(raster_list)
+
+  # Convert sf to terra::vect
+  vect_points <- terra::vect(points_sf)
+
+  # Loop through rasters and extract
+  extracted_list <- lapply(seq_along(raster_list), function(i) {
+    r <- raster_list[[i]]
+    vals <- terra::extract(r, vect_points)[, -1, drop = FALSE]
+
+    # Generate nice column names using object name and band names
+    layer_names <- names(r)
+    if (is.null(layer_names) || any(layer_names == "")) {
+      layer_names <- paste0("band", seq_len(ncol(vals)))
+    }
+
+    prefix <- raster_names[i]
+    colnames(vals) <- paste0(prefix, "_", layer_names)
+
+    return(vals)
+  })
+
+  # Combine all extracted values
+  all_extracted <- do.call(cbind, extracted_list)
+
+  # Add to sf object
+  result_sf <- cbind(points_sf, all_extracted)
+
+  return(result_sf)
+}
 
 
+results_ext <- extract_from_named_rasters(rasters_list,points_sf)
+results_ext_2 <- extract_from_named_rasters(world_clim_list,results_ext)
+results_ext_3 <- extract_from_named_rasters(hilda_rast_list,results_ext_2)
+
+
+### shapefiles
+
+
+write_delim(results_ext_3,"../results/species_occurrences_art17_spatial.tsv",delim="\t")
+
+
+############################## Hilda analysis ##############################
 for (i in 1:length(hilda_files)){
     print(i)
     filename <- hilda_files[i]
