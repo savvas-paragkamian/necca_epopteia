@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/env Rscript
 
 ## Script name: dfrvs_invertebrates_gr.R
 ##
@@ -27,14 +27,26 @@ gr_1km <- sf::st_read("../spatial_data/eea_1km/gr_1km.shp") |>
 
 ########################### Load Species Data ###########################
 ### Species occurrences enriched ######
-species_occurrences_art17_invertebrates <- read_delim("../results/species_occurrences_art17_invertebrates.tsv",delim="\t")
+species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
+species_occurrences_spatial <- read_delim("../results/species_occurrences_spatial.tsv",delim="\t")
+species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
 
+classification_species_gbif <- read_delim("../results/classification_species_gbif.tsv", delim="\t")
+iucn_art17_invert_all <- read_delim("../results/iucn_art17_invert_all.tsv", delim="\t")
 
-sspecies_dist_national_rep <- sf::st_read("../spalia_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
-species_dist_national_rep_sens <- sf::st_read("../spalia_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
+sspecies_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
+species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 
 
 ########################## Flowchart for FRVs ##########################
+# what is known for each species
+species_info <- species_samples_art17 |>
+    distinct(species) |> 
+    left_join(classification_species_gbif, by=c("species"="species")) |>
+    left_join(iucn_art17_invert_all, by=c("species"="scientificName"))
+
+
+
 ########################## Parnassius apollo ###########################
 
 

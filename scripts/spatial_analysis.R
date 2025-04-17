@@ -19,9 +19,9 @@ library(ggpubr)
 ########################## Load Data ##########################
 ###
 ### Species occurrences enriched ######
-species_occurrences_art17_invertebrates <- read_delim("../results/species_occurrences_art17_invertebrates.tsv",delim="\t")
+species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-species_occurrences_art17_sf <- species_occurrences_art17_invertebrates |> 
+species_occurrences_sf <- species_occurrences_invertebrates |> 
     filter(!is.na(decimalLatitude)) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
@@ -54,6 +54,9 @@ world_clim_list <- lapply(world_clim_files, rast)
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
+N2000_v32_wgs <- st_transform(N2000_v32,4326)
+N2000_v32_wgs_sci <- N2000_v32_wgs |>
+    filter(SITETYPE=="SCI")
 
 ### Ecosystem Types of Europe 3.1 Terrestrial
 ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
@@ -63,7 +66,8 @@ ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_ep
 vegetation_map <- sf::st_read("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.shp",
                               options = "ENCODING=WINDOWS-1253")
 
-vegetation_map_wgs <- st_transform(vegetation_map,4326)
+vegetation_map_wgs <- st_transform(vegetation_map,4326) |>
+    st_make_valid()
 
 veg_data <- data.frame(
   A_VEG_TYPE = c("ΕΛΑ", "ΕΡΛ", "ΠΜΑ", "ΠΛΔ", "ΠΔΑ", "ΠΧΑ", "ΠΚΟ", "ΠΘΑ", "ΚΠΡ",
@@ -85,7 +89,8 @@ veg_data <- data.frame(
 
 EUNIS_Habitats <- sf::st_read("../spatial_data/EUNIS_Habitats_2018/Habitats_2018/Habitats.shp")
 
-EUNIS_Habitats_wgs <- st_transform(EUNIS_Habitats,4326)
+EUNIS_Habitats_wgs <- st_transform(EUNIS_Habitats,4326) |>
+    st_make_valid()
 
 ######### HILDA Greece land use change ##########
 hilda_cat <- data.frame(hilda_id = c("11","22","33","44","55","66","77"),
@@ -114,7 +119,7 @@ hilda_rast_list <- lapply(hilda_files, function(x) rast(paste0(hilda_path,x,sep=
 
 rasters_list <- list(eu_dem_gr,eu_dem_slope,ecosystem_types_gr) # hilda_rast_list, add later ,world_clim_list
 
-points_sf <- species_occurrences_art17_sf
+points_sf <- species_occurrences_sf
 
 extract_from_named_rasters <- function(raster_list, points_sf) {
   if (!all(sapply(raster_list, inherits, "SpatRaster"))) {
@@ -161,8 +166,58 @@ results_ext_3 <- extract_from_named_rasters(hilda_rast_list,results_ext_2)
 
 ### shapefiles
 
+extract_polygon_info_multi <- function(points_sf, polygons_list, suffixes = NULL) {
+  if (!inherits(points_sf, "sf")) stop("points_sf must be an sf object.")
+  if (!is.list(polygons_list)) stop("polygons_list must be a list of sf objects.")
+  
+  result <- points_sf
+  
+  for (i in seq_along(polygons_list)) {
+    poly_sf <- polygons_list[[i]]
+    if (!inherits(poly_sf, "sf")) stop(paste0("Item ", i, " in polygons_list is not an sf object."))
+    
+    # Perform spatial join
+    print(polygons_list[i])
+    joined <- st_join(result, poly_sf, join = st_within, left = TRUE, largest = FALSE)
+    
+    # Detect new columns added by join (excluding geometry)
+    new_cols <- setdiff(names(joined), names(result))
+    new_cols <- new_cols[new_cols != attr(joined, "sf_column")]  # exclude geometry column
+    
+    # If no new columns, skip this layer
+    if (length(new_cols) == 0) {
+      warning(paste("No new columns added from polygon layer", i, "- skipping."))
+      next
+    }
 
-write_delim(results_ext_3,"../results/species_occurrences_art17_spatial.tsv",delim="\t")
+    # Add suffixes to new columns
+    suffix <- if (!is.null(suffixes) && length(suffixes) >= i) suffixes[i] else paste0("poly", i)
+    names(joined)[names(joined) %in% new_cols] <- paste0(new_cols, "_", suffix)
+    
+    # Drop geometry to avoid duplication
+    joined_no_geom <- joined %>% st_drop_geometry()
+    
+    # Append only the new columns
+    result <- bind_cols(result, joined_no_geom[, paste0(new_cols, "_", suffix), drop = FALSE])
+  }
+  
+  return(result)
+}
+
+result <- extract_polygon_info_multi(
+  results_ext_3,
+  polygons_list <- list(eea_1km_wgs,
+                      eea_10km_wgs,
+                      N2000_v32_wgs_sci,
+                      vegetation_map_wgs,
+                      EUNIS_Habitats_wgs),
+  suffixes = c("eea_1km","eea_10km","N2000_v32","vegetation_map","EUNIS_Habitats")
+)
+
+
+
+species_occurrences_spatial <- result
+write_delim(species_occurrences_spatial,"../results/species_occurrences_spatial.tsv",delim="\t")
 
 
 ############################## Hilda analysis ##############################
@@ -275,27 +330,27 @@ for (i in 1:length(hilda_files)){
 
 
 ######################
-# Define bounding box as sf object for visual checks if needed
-bbox <- st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = 4326)
-bbox_sf <- st_as_sfc(bbox)
-
-# Generate 4 random points inside the bounding box
-set.seed(123)
-points_inside <- st_as_sf(data.frame(
-  id = 1:4,
-  x = runif(4, xmin, xmax),
-  y = runif(4, ymin, ymax)
-), coords = c("x", "y"), crs = 4326)
-
-# Generate 4 random points outside the bounding box
-points_outside <- st_as_sf(data.frame(
-  id = 5:8,
-  x = c(runif(2, xmin - 10, xmin - 1), runif(2, xmax + 1, xmax + 10)),
-  y = c(runif(2, ymin - 10, ymin - 1), runif(2, ymax + 1, ymax + 10))
-), coords = c("x", "y"), crs = 4326)
-
-# Combine the points into one sf object for easy handling
-all_points <- rbind(points_inside, points_outside)
-
+## Define bounding box as sf object for visual checks if needed
+#bbox <- st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = 4326)
+#bbox_sf <- st_as_sfc(bbox)
+#
+## Generate 4 random points inside the bounding box
+#set.seed(123)
+#points_inside <- st_as_sf(data.frame(
+#  id = 1:4,
+#  x = runif(4, xmin, xmax),
+#  y = runif(4, ymin, ymax)
+#), coords = c("x", "y"), crs = 4326)
+#
+## Generate 4 random points outside the bounding box
+#points_outside <- st_as_sf(data.frame(
+#  id = 5:8,
+#  x = c(runif(2, xmin - 10, xmin - 1), runif(2, xmax + 1, xmax + 10)),
+#  y = c(runif(2, ymin - 10, ymin - 1), runif(2, ymax + 1, ymax + 10))
+#), coords = c("x", "y"), crs = 4326)
+#
+## Combine the points into one sf object for easy handling
+#all_points <- rbind(points_inside, points_outside)
+#
 
 

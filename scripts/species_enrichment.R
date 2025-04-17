@@ -96,11 +96,11 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 gbif_species_occ <- read_delim("../results/gbif_species_occ.tsv", delim="\t") |>
     mutate(datasetName="Gbif")
 
-# Define the bounding box coordinates
-xmin <- 19.37359
-ymin <- 34.80202
-xmax <- 29.64306
-ymax <- 41.7485
+## Define the bounding box coordinates
+#xmin <- 19.37359
+#ymin <- 34.80202
+#xmax <- 29.64306
+#ymax <- 41.7485
 
 gbif_species_occ_sf <- gbif_species_occ |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
@@ -289,7 +289,7 @@ columns_to_keep <- c("species",
                      "basisOfRecord",
                      "individualCount")
 
-species_occurrences_art17_invertebrates <- list(gbif_species_occ_gr,
+species_occurrences_invertebrates <- list(gbif_species_occ_gr,
                                     E1X_MDPP_2014_2024_all,
                                     E1X_DB_select,
                                     E1X_DB_ref_all,
@@ -298,9 +298,9 @@ species_occurrences_art17_invertebrates <- list(gbif_species_occ_gr,
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
     bind_rows() 
 
-write_delim(species_occurrences_art17_invertebrates, "../results/species_occurrences_art17_invertebrates.tsv",delim="\t")
+write_delim(species_occurrences_invertebrates, "../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-species_samples_art17 <- species_occurrences_art17_invertebrates |>
+species_samples_art17 <- species_occurrences_invertebrates |>
     filter(species %in% species_names_combined)
 
 species_samples_art17_sf <- species_samples_art17 |>
@@ -309,6 +309,7 @@ species_samples_art17_sf <- species_samples_art17 |>
              remove=F,
              crs="WGS84")
 
+write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
 species_with_data <- unique(species_samples_art17_sf$species)
 
 datasets_colors <- c(
