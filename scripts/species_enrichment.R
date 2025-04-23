@@ -21,63 +21,10 @@ library(rnaturalearth)
 ############################# Load data ############################
 ## borders for maps
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
-########################## species information ##############################
-# the species of the previous epopteia 2015
 
-invertebrates_92_43 <- readxl::read_excel("../data/invertebrates_92_43.xlsx", skip=2, col_names=F)
+species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
 
-colnames(invertebrates_92_43) <- c("no","area","SPECIES_NAME","SPECIES_ID","ORDER","CLASS","PRIORITY","ANNEX_II","ANNEX_IV","ANNEX_V","KD","POPULATION_TREND","POPULATION_SIZE_UNIT","OCCURRENCE","SD")
-
-species_names <- unique(invertebrates_92_43$SPECIES_NAME) 
-
-#### this list contains species names from multiple versions of Monitoring, EPOPTEIA I, EPOPTEIA II. 
-species_names_combined <- c(
-  "Apatura metis",
-  "Astacus astacus",
-  "Austropotamobius torrentium",
-  "Bolbelasmus unicornis",
-  "Buprestis splendens",
-  "Callimorpha (Euplagia, Panaxia) quadripunctaria",
-  "Catopta thrips",
-  "Cerambyx cerdo",
-  "Coenagrion ornatum",
-  "Cordulegaster heros",
-  "Dioszeghyana schmidtii",
-  "Eriogaster catax",
-  "Euphydryas (Eurodryas, Hypodryas) aurinia",
-  "Euphydryas aurinia",
-  "Euplagia quadripunctaria",
-  "Hirudo medicinalis",
-  "Hirudo verbana",
-  "Hyles hippophaes",
-  "Lindenia tetraphylla",
-  "Lucanus cervus",
-  "Lycaena dispar",
-  "Maculinea arion",
-  "Morimus asper funereus",
-  "Morimus funereus",
-  "Ophiogomphus cecilia",
-  "Osmoderma eremita",
-  "Osmoderma eremita Complex",
-  "Papilio alexanor",
-  "Paracaloptenus caloptenoides",
-  "Parnassius apollo",
-  "Parnassius mnemosyne",
-  "Polyommatus eroides",
-  "Probaticus subrugosus",
-  "Proserpinus proserpina",
-  "Pseudophilotes bavius",
-  "Rhysodes sulcatus",
-  "Rosalia alpina",
-  "Stenobothrus (Stenobothrodes) eurasius",
-  "Stenobothrus eurasius",
-  "Stylurus flavipes",
-  "Unio crassus",
-  "Unio elongatulus",
-  "Vertigo angustior",
-  "Vertigo moulinsiana",
-  "Zerynthia polyxena"
-)
+species_names_combined <- as.character(species_taxonomy$verbatim_name)
 
 ################################ Enrichment ###################################
 
@@ -93,7 +40,7 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 ############################################################################################
 ##### Gbif data
 
-gbif_species_occ <- read_delim("../results/gbif_species_occ.tsv", delim="\t") |>
+gbif_species_occ <- read_delim("../results/gbif_invertebrate_species_occ.tsv", delim="\t") |>
     mutate(datasetName="Gbif")
 
 ## Define the bounding box coordinates
@@ -102,15 +49,12 @@ gbif_species_occ <- read_delim("../results/gbif_species_occ.tsv", delim="\t") |>
 #xmax <- 29.64306
 #ymax <- 41.7485
 
-gbif_species_occ_sf <- gbif_species_occ |>
+print("gbif")
+gbif_species_occ_gr <- gbif_species_occ |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
 
-print("gbif")
-gbif_species_occ_gr <- gbif_species_occ_sf |>
-    filter(lengths(st_intersects(geometry, greece_regions)) > 0) |>
-    st_drop_geometry()
 print("end gbif")
 
 ######## NECCA compilation of previous Monitoring Data not included in ENVECO database
