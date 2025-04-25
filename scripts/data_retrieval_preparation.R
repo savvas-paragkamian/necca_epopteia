@@ -152,9 +152,9 @@ occ_download_wait('0010753-250415084134356')
 #gbif_species_occ <- occ_download_get('0010753-250415084134356') |>
 #    occ_download_import()
 
-#write_delim(gbif_species_occ, "../results/gbif_invertebrate_species_occ.tsv", delim="\t")
+#write_delim(gbif_species_occ, "../data/gbif_invertebrate_species_occ.tsv", delim="\t")
 
-gbif_species_occ <- read_delim("../results/gbif_invertebrate_species_occ.tsv", delim="\t")
+gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t")
 
 gbif_species_occ_sf <- gbif_species_occ |> 
     st_as_sf(coords=c("decimalLatitude","decimalLongitude"),
