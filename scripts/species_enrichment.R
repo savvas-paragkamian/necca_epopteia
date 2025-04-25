@@ -254,7 +254,7 @@ species_samples_art17_sf <- species_samples_art17 |>
              crs="WGS84")
 
 write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
-species_with_data <- unique(species_samples_art17_sf$species)
+species_with_data <- species_names_combined
 
 datasets_colors <- c(
                      "Gbif"="#74B375",
