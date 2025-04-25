@@ -58,6 +58,13 @@ N2000_v32_wgs <- st_transform(N2000_v32,4326)
 N2000_v32_wgs_sci <- N2000_v32_wgs |>
     filter(SITETYPE=="SCI")
 
+N2000_v32_wgs_spa <- N2000_v32_wgs |>
+    filter(SITETYPE=="SPA")
+
+N2000_v32_wgs_scispa <- N2000_v32_wgs |>
+    filter(SITETYPE=="SCISPA")
+
+
 ### Ecosystem Types of Europe 3.1 Terrestrial
 ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
 
@@ -209,9 +216,11 @@ result <- extract_polygon_info_multi(
   polygons_list <- list(eea_1km_wgs,
                       eea_10km_wgs,
                       N2000_v32_wgs_sci,
+                      N2000_v32_wgs_spa,
+                      N2000_v32_wgs_scispa,
                       vegetation_map_wgs,
                       EUNIS_Habitats_wgs),
-  suffixes = c("eea_1km","eea_10km","N2000_v32","vegetation_map","EUNIS_Habitats")
+  suffixes = c("eea_1km","eea_10km","N2000_v32_sci","N2000_v32_spa","N2000_v32_scispa","vegetation_map","EUNIS_Habitats")
 )
 
 
