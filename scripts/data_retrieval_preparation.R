@@ -35,6 +35,7 @@ species_names <- unique(invertebrates_92_43$SPECIES_NAME)
 species_names_combined <- c(
   "Apatura metis",
   "Astacus astacus",
+  "Austropotamobious torrentium",
   "Austropotamobius torrentium",
   "Bolbelasmus unicornis",
   "Buprestis splendens",
@@ -58,6 +59,7 @@ species_names_combined <- c(
   "Lycaena dispar",
   "Maculinea arion",
   "Morimus asper funereus",
+  "Morimus asper",
   "Morimus funereus",
   "Ophiogomphus cecilia",
   "Osmoderma eremita",
@@ -83,6 +85,16 @@ species_names_combined <- c(
 )
 
 ######################## Species taxonomy ########################
+necca_redlist_points <- st_read("../data/necca_redlist/points_invertebrates.gpkg")
+
+## Austropotamobious torrentium is wrong! Austropotamobius torrentium is the correct
+necca_redlist_species <- unique(necca_redlist_points$sci_name)
+necca_redlist_gnr <- gna_verifier(necca_redlist_species,
+                                     all_matches=T,
+                                     data_sources=c(1,9,11,12)) #Catalogue of Life, Worms, Gbif,EOL
+write_delim(necca_redlist_gnr,"../results/necca_redlist_gnr.tsv",delim="\t")
+
+
 ### gnr verifier to resolve species names
 gnr_species_verifier <- gna_verifier(species_names_combined,
                                      all_matches=T,
