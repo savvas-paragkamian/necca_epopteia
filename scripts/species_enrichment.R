@@ -40,8 +40,9 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 ############################################################################################
 ##### Gbif data
 
-gbif_species_occ <- read_delim("../results/gbif_invertebrate_species_occ.tsv", delim="\t") |>
-    mutate(datasetName="Gbif")
+gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t") |>
+    mutate(datasetName="Gbif") |>
+    rename("submittedName"="species")
 
 ## Define the bounding box coordinates
 #xmin <- 19.37359
@@ -81,7 +82,8 @@ E1X_MDPP_2014_2024_all <- E1X_MDPP_2014_2024_species_data |>
                                    TRUE,
                                    FALSE)) |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
-    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID"))
+    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) |>
+    mutate(submittedName=`Όνομα είδους`)
 
 ######### previous monitoring from ENVECO
 ##### references
@@ -103,7 +105,7 @@ E1X_DB_ref_all <- E1X_DB_ref_samples_data |>
               by=c("Κωδικός Αναφοράς"="Κωδικός Αναφοράς")) |>
     mutate(datasetName="E1X_DB_references") |>
     mutate(basisOfRecord="MaterialCitation") |>
-    mutate(species=`Ονομασία είδους`) |>
+    mutate(submittedName=`Ονομασία είδους`) |>
     mutate(individualCount=as.numeric(`Πλήθος ατόμων`))
 
 
@@ -123,7 +125,7 @@ E1X_DB_all <- E1X_DB_species_data |>
     filter(!is.na(Sam_ID)) |> 
     left_join(E1X_DB_samples_data, by=c("Sam_ID"="Sam_ID")) |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
-    mutate(species=`Όνομα είδους`) |>
+    mutate(submittedName=`Όνομα είδους`) |>
     mutate(datasetName = "E1X_DB") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
@@ -137,10 +139,10 @@ E1X_DB_select <- E1X_DB_all |>
 
 ######################## other private data
 
-Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_20250316.csv", delim=",") |>
+Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_20250427.csv", delim=",") |>
     mutate(decimalLongitude=Longitude,
            decimalLatitude=Latitude,
-           species=Species,
+           submittedName=Species,
            individualCount=as.numeric(Individuals)) |>
     mutate(datasetName = "Invertebrates_records_Olga") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
@@ -154,7 +156,7 @@ necca_redlist_points_df <- necca_redlist_points |>
     mutate(decimalLongitude = st_coordinates(.)[, 1],
            decimalLatitude = st_coordinates(.)[, 2]) |>
     st_drop_geometry() |>
-    rename("species"="sci_name") |>
+    rename("submittedName"="sci_name") |>
     mutate(datasetName = "NECCA_redlist") |>
     mutate(individualCount=NA) |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
@@ -221,12 +223,13 @@ iucn_art17_invert_all <- iucn_art17_invert_summary |>
     left_join(iucn_art17_invert_threats,
               by=c("scientificName"="scientificName")
               ) |>
-    mutate(datasetName = "IUCN_redlist") 
+    mutate(datasetName = "IUCN_redlist") |>
+    rename("submittedName"="scientificName")
 
 write_delim(iucn_art17_invert_all, "../results/iucn_art17_invert_all.tsv", delim="\t")
 ############################# Species data integration ###################
 ### common column names
-columns_to_keep <- c("species",
+columns_to_keep <- c("submittedName",
                      "decimalLatitude",
                      "decimalLongitude",
                      "datasetName",
@@ -242,10 +245,12 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
     bind_rows() 
 
+
 write_delim(species_occurrences_invertebrates, "../results/species_occurrences_invertebrates.tsv",delim="\t")
 
 species_samples_art17 <- species_occurrences_invertebrates |>
-    filter(species %in% species_names_combined)
+    filter(submittedName %in% species_names_combined) |>
+    left_join(species_taxonomy, by=c("submittedName"="verbatim_name"))
 
 species_samples_art17_sf <- species_samples_art17 |>
     filter(!is.na(decimalLongitude)) |>
@@ -254,7 +259,7 @@ species_samples_art17_sf <- species_samples_art17 |>
              crs="WGS84")
 
 write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
-species_with_data <- species_names_combined
+species_with_data <- unique(species_samples_art17$species)
 
 datasets_colors <- c(
                      "Gbif"="#74B375",
