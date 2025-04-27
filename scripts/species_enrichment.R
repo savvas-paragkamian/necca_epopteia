@@ -12,6 +12,7 @@
 
 library(sf)
 library(tidyverse)
+library(ggpubr)
 library(readxl)
 library(taxize)
 library(units)
@@ -262,14 +263,78 @@ write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim=
 species_with_data <- unique(species_samples_art17$species)
 
 datasets_colors <- c(
-                     "Gbif"="#74B375",
+                     "Gbif"="seagreen",
                      "NECCA_redlist"="#B31319",
                      "E1X_MDPP_2014_2024"="#FDF79C",
                      "E1X_DB"="#2BA09F",
                      "E1X_DB_references"="#141D43",
                      "Invertebrates_records_Olga"="#F85C29"
                      )
+# load natura
+N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
+N2000_v32_wgs <- st_transform(N2000_v32,4326)
+
+
+# base plot with Natura2000 areas of Greece
+natura_colors <- c(
+                   "SCI"="#E69F00",
+                   "SPA"="#56B4E9",
+                   "SCISPA"="#CC79A7"
+)
+
+g_base_n2000 <- ggplot()+
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.3,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                       guide = guide_legend(
+                                            override.aes = list(
+                                                                linetype="solid",
+                                                                shape = NA)
+                                            ),
+                       name="Natura2000"
+                       )+
+    theme_bw()
+ggsave("../figures/map_natura.png", 
+           plot=g_base_n2000, 
+           height = 20, 
+           width = 20,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+### natura2000 with all points
+g_art17_n2000 <- g_base_n2000 +
+    geom_point(species_samples_art17_sf,
+            mapping=aes(x=decimalLongitude,
+                        y=decimalLatitude,
+                        color=datasetName),
+            size=1.2,
+            alpha=0.8,
+            show.legend=T) +
+    scale_color_manual(values=datasets_colors,
+                        name = "Datasets")+
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+    theme(legend.position.inside = c(0.87, 0.75)
+    )
+
+
+ggsave("../figures/map_art17_invertebrates_natura.png", 
+           plot=g_art17_n2000, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+### figures of each invertebrate of art17 for Greece
 
 for (i in seq_along(species_with_data)){
     species_occurrences <- species_samples_art17_sf |>
@@ -279,29 +344,32 @@ for (i in seq_along(species_with_data)){
     print(species_with_data[i])
 
     
-    species_gr_map <- ggplot() +
-        geom_sf(greece_regions, mapping=aes()) +
+    species_gr_map <- g_base_n2000 +
         geom_point(species_occurrences,
                 mapping=aes(x=decimalLongitude,
                             y=decimalLatitude,
                             color=datasetName),
                 size=1.8,
-                alpha=0.8,
+                alpha=0.9,
                 show.legend=T) +
         coord_sf(crs="WGS84") +
-        scale_color_manual(values=dataset_colors_f)+
+        scale_color_manual(values=dataset_colors_f,
+                        name = "Datasets") +
+        guides(
+               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
         ggtitle(paste(species_with_data[i]))+
         theme_bw()+
         theme(axis.title=element_blank(),
               axis.text=element_text(colour="black"),
               legend.title = element_text(size=8),
-              legend.position = "bottom",
+              legend.position.inside = c(0.87, 0.75),
               legend.box.background = element_blank())
     
     ggsave(paste0("../figures/species/map_", species_with_data[i], "_occurrences.png", sep=""), 
            plot=species_gr_map, 
            height = 20, 
-           width = 20,
+           width = 25,
            dpi = 300, 
            units="cm",
            device="png")
