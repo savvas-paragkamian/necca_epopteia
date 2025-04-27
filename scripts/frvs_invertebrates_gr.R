@@ -12,6 +12,7 @@
 library(sf)
 library(terra)
 library(tidyverse)
+library(ggnewscale)
 library(readxl)
 library(dismo)
 library(units)
@@ -42,7 +43,7 @@ species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", deli
 species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
 iucn_art17_invert_all <- read_delim("../results/iucn_art17_invert_all.tsv", delim="\t")
 iucn_art17_invert_no_tax <- iucn_art17_invert_all |>
-    dplyr::select(-ends_with("Name"),scientificName)
+    dplyr::select(-ends_with("Name"),submittedName)
 
 sspecies_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
 species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
@@ -51,22 +52,20 @@ species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2
 ########################## Flowchart for FRVs ##########################
 # keep only one species name from the synonyms
 species_info <- species_samples_art17 |>
-    distinct(species) |> 
-    rename("verbatim_name"="species") |>
-    left_join(species_taxonomy, by=c("verbatim_name"="verbatim_name")) |>
-    left_join(iucn_art17_invert_no_tax, by=c("species"="scientificName"))
+    distinct(submittedName) |> 
+    left_join(species_taxonomy, by=c("submittedName"="verbatim_name")) |>
+    left_join(iucn_art17_invert_no_tax, by=c("submittedName"="submittedName"))
 # species spatial 
 species_art17_spatial <- species_occurrences_spatial |>
-    rename("verbatim_name"="species") |>
-    filter(verbatim_name %in% species_taxonomy$verbatim_name) |>
-    left_join(species_info, by=c("verbatim_name"="verbatim_name")) |>
+    filter(submittedName %in% species_taxonomy$verbatim_name) |> # remove mostly NA's and species not in list
+    left_join(species_info) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
 
 
 species_art17_spatial_f <- species_art17_spatial |>
-    dplyr::select(verbatim_name,basisOfRecord,datasetName)
+    dplyr::select(submittedName,basisOfRecord,datasetName)
 
 dir.create("../results/species_art17_spatial", recursive = TRUE, showWarnings = FALSE)
 st_write(species_art17_spatial_f,"../results/species_art17_spatial/species_art17_spatial.shp",delete_layer = TRUE)
@@ -98,7 +97,7 @@ species_1km_n2000 <- species_art17_spatial |>
 
 
 species_summary <- species_info |>
-    dplyr::select(-verbatim_name) |>
+    dplyr::select(-submittedName) |>
     distinct() |>
     left_join(species_points) |>
     left_join(species_1km) |>
@@ -137,21 +136,53 @@ locations_10_grid_samples <- st_join(gr_10km, species_samples_art17_parnasious, 
     summarise(n_samples=n(),.groups="keep")
 
 
-hotspot_apollo_map <- ggplot() +
+datasets_colors <- c(
+                     "Gbif"="seagreen",
+                     "NECCA_redlist"="#B31319",
+                     "E1X_MDPP_2014_2024"="#FDF79C",
+                     "E1X_DB"="#2BA09F",
+                     "E1X_DB_references"="#141D43",
+                     "Invertebrates_records_Olga"="#F85C29"
+                     )
+
+# base plot with Natura2000 areas of Greece
+natura_colors <- c(
+                   "SCI"="#E69F00",
+                   "SPA"="#56B4E9",
+                   "SCISPA"="#CC79A7"
+)
+
+hotspot_apollo_map <- ggplot()+
     geom_sf(greece_regions, mapping=aes()) +
-    geom_sf(N2000_v32_wgs, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.8,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                       guide = guide_legend(position = "inside",
+                                            override.aes = list(alpha = 0.5,
+                                                                linetype="solid",
+                                                                color = NA)),
+                       name="Natura2000")+
+    new_scale_fill()+
     geom_sf(locations_10_grid_samples, mapping=aes(fill=n_samples),
             alpha=0.8,
             colour="transparent",
             na.rm = F,
             show.legend=T) +
-    
-    geom_sf(species_samples_art17_parnasious, mapping=aes(),size=1,alpha=0.4) +
-    scale_fill_gradient(low="#f0e442",
-                        high="#d55e00",
+    geom_sf(species_samples_art17_parnasious, mapping=aes(color=datasetName),size=1,alpha=0.6) +
+    scale_fill_gradient(low="gray50",
+                        high="gray5",
                         guide = "colourbar")+
-    coord_sf(crs="wgs84") +
-    guides(fill = guide_colourbar(ticks = F,
+    scale_color_manual(values=datasets_colors,
+                        name = "Datasets")+
+    guides(
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)),
+           fill = guide_colourbar(position = "inside",
+                                  alpha = 1,
+                                  ticks = F,
                                   label = T,
                                   title="n_samples",
                                   title.vjust = 0.8,
@@ -160,13 +191,13 @@ hotspot_apollo_map <- ggplot() +
     theme(axis.title=element_blank(),
           axis.text=element_text(colour="black"),
           legend.title = element_text(size=8),
-          legend.position = "bottom",
+          legend.position.inside = c(0.87,0.65),
           legend.box.background = element_blank())
 
 ggsave("../figures/hotspots_parnassius_apollo_map.png", 
        plot=hotspot_apollo_map, 
-       height = 30, 
-       width = 30,
-       dpi = 200, 
+       height = 20, 
+       width = 25,
+       dpi = 300, 
        units="cm",
        device="png")
