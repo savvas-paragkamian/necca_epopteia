@@ -19,8 +19,10 @@ the period 10-2024 until 07-2025.
 * [Software](#software)
 * [Licence](#licence)
 
+
 ## Scripts
 
+![The flowchart of the scripts for the calculation of FRVs](invertebrates_frvs_script_flowchart.png)
 The scripts in this repository are (with the order of execution):
 1. species_enrichment.R
 
@@ -45,6 +47,7 @@ submission.
 
 The script *necca_db_standards.R* aims to construct all the data 
 compliled from this work in a compatible form with the NECCA database.
+
 
 ## Species enrichment
 
