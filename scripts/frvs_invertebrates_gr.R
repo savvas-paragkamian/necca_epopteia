@@ -201,7 +201,7 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
        device="png")
 
 ############## Modeling FRV ##################
-
+## based on https://rspatial.org/sdm/index.html 
 ## sampling bias
 ##
 ### # create a SpatRaster with the extent of acgeo
@@ -261,12 +261,14 @@ veg_rast <- rast(vegetation_map)
 
 # crop and resample 
 dem_rast_c <- crop(dem_rast,ext(gr_1km_rast))
+slope_rast_c <- crop(slope_rast,ext(gr_1km_rast))
 bio12_rast_c <- crop(bio12_rast,ext(gr_1km_rast))
 bio15_rast_c <- crop(bio15_rast,ext(gr_1km_rast))
 veg_rast_c <- crop(veg_rast,ext(gr_1km_rast))
 
 
 dem_rast_r <- resample(dem_rast_c,gr_1km_rast)
+slope_rast_r <- resample(slope_rast_c,gr_1km_rast)
 bio12_rast_r <- resample(bio12_rast_c,gr_1km_rast)
 bio15_rast_r <- resample(bio15_rast_c,gr_1km_rast)
 veg_rast_r <- resample(veg_rast_c,gr_1km_rast)
@@ -274,25 +276,66 @@ veg_rast_r <- resample(veg_rast_c,gr_1km_rast)
 # Step 3: Rasterize the polygon (using a specific field to assign values)
 
 ## resample with the gr_1km 
-predictors <- c(slope_rast,dem_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)  # Stack the rasters
+predictors <- c(gr_1km_rast,slope_rast_r,dem_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)  # Stack the rasters
+plot_rasters <- c(slope_rast_r,dem_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)  # Stack the rasters
 ## plot
-plot(veg_rasterized)
-points(apollo_points, col='red')
+png("../figures/stacked_raster_with_points.png", width = 2000, height = 1500, units="px")
+n <- nlyr(plot_rasters)
+plot(plot_rasters, nr = 2, nc = 3)
+dev.off()
 
-#eea_1km_wgs <- st_transform(eea_1km,4326)
+## extract values
 
-presvals <- extract(predictors, apollo)
+presvals <- extract(predictors, apollo_points)
 # remove the ID variable
 presvals <- presvals[,-1]
 # setting random seed to always create the same
 # random set of points for this example
 set.seed(0)
-backgr <- spatSample(predictors, 500, "random", as.points=TRUE, na.rm=TRUE)
+backgr <- spatSample(predictors, 1000, "random", as.points=TRUE, na.rm=TRUE)
+backgr$A_VEG_TYPE <- as.character(backgr$A_VEG_TYPE)
 absvals <- values(backgr)
 pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
 sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
 
+png("../figures/sdmdata_pairs.png", width = 2000, height = 1500, units="px")
+pairs(sdmdata[,3:7], cex=0.8)
+
+dev.off()
+
 ## Model fitting
+m1 <- glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15 + A_VEG_TYPE, data=sdmdata)
+class(m1)
+summary(m1)
+
+m2 = glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15, data=sdmdata)
+m2
+
+## predicts
 ##
+library(predicts)
+presvals_clean <- presvals[complete.cases(presvals[,c("eudem_dem_4258_europe", "wc2.1_30s_bio_12", "wc2.1_30s_bio_15", "A_VEG_TYPE")]), ]
+
+bc <- envelope(presvals_clean[,c("eudem_dem_4258_europe", "wc2.1_30s_bio_12", "wc2.1_30s_bio_15", "A_VEG_TYPE")])
+bc
+
+pr <- partialResponse(bc, presvals_clean, "wc2.1_30s_bio_12")
+p <- predict(predictors, m2)
+
+library(RColorBrewer)
+colors <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
+png("../figures/sdm_predict_apollo.png", width = 2000, height = 1500, units="px")
+plot(p,col = colors)
+points(apollo_points)
+dev.off()
+
+### fRP
+filtered_raster <- p > 0.6
+plot(filtered_raster)
+masked_raster <- mask(p, filtered_raster)
+cell_area <- res(p)[1] * res(p)[2]
+area <- sum(!is.na(masked_raster[])) * cell_area
+
+
 ## Model evaluation
 
