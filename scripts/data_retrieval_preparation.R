@@ -20,6 +20,7 @@ library(rnaturalearth)
 ###
 ###
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
+greece_regions_vec <- vect(greece_regions)
 
 ########################## species information ##############################
 # the species of the previous epopteia 2015
@@ -249,7 +250,7 @@ ggsave("../figures/gbif_species_gr_map.png",
 crop_raster_by_shp <- function(raster_path, shp, output_path) {
     # Read the raster
     raster_tmp <- rast(raster_path)
-    bbox_polygon <- st_as_sf(st_as_sfc(st_bbox(shp)))
+    bbox_sf <- st_as_sf(st_as_sfc(st_bbox(shp)))
     # Check CRS match
     raster_crs <- crs(raster_tmp, proj=TRUE)
     bbox_crs <- st_crs(bbox_sf)$wkt
@@ -367,3 +368,64 @@ crop_raster_by_shp(ecosystem_types,greece_regions,ecosystem_types_gr_d)
 
 
 #ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
+
+############### rasterize ###############
+### reference grid ###
+#load
+gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") 
+
+# rasterize
+polygon_sf <- gr_1km 
+
+raster_template <- rast(ext = ext(polygon_sf), resolution = 1000)  # 1000 meters = 1 km resolution
+raster_object <- rasterize(polygon_sf, raster_template, field = "CELLCODE", background = NA)
+gr_1km_rast <- raster_object
+crs(gr_1km_rast) <- "EPSG:3035"
+writeRaster(raster_object, "../spatial_data/eea_reference_grid/gr_1km.tif",overwrite=TRUE)
+
+# Reproject using resample to align with the polygon's CRS
+
+gr_1km_rast_wgs <- project(gr_1km_rast,"EPSG:4326")
+
+writeRaster(gr_1km_rast_wgs, "../spatial_data/eea_reference_grid/gr_1km_wgs.tif",overwrite=TRUE)
+
+### keep only land
+
+bbox_sf <- st_as_sf(st_as_sfc(st_bbox(greece_regions)))
+gr_1km_c <- crop(gr_1km_rast_wgs,bbox_sf)
+gr_1km_terra <- mask(gr_1km_c, greece_regions)
+
+writeRaster(gr_1km_terra, "../spatial_data/eea_reference_grid/gr_1km_terra.tif",overwrite=TRUE)
+
+### vegetation map
+
+
+vegetation_map <- sf::st_read("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.shp",
+                              options = "ENCODING=WINDOWS-1253")
+
+vegetation_map_wgs <- st_transform(vegetation_map,4326) |>
+    st_make_valid()
+
+veg_data <- data.frame(
+  A_VEG_TYPE = c("ΕΛΑ", "ΕΡΛ", "ΠΜΑ", "ΠΛΔ", "ΠΔΑ", "ΠΧΑ", "ΠΚΟ", "ΠΘΑ", "ΚΠΡ",
+                 "ΑΡΚ", "ΟΞΥ", "ΔΡΥ", "ΚΑΣ", "ΣΗΜ", "ΣΦΕ", "ΦΙΛ", "ΦΠΛ", "ΠΑΡ",
+                 "ΕΥΚ", "ΦΟΙ", "ΘΑΜ", "ΦΘΑ", "ΛΙΒ", "ΑΓΟ", "ΟΙΚ", "ΓΚΑ", "ΓΚΕ",
+                 "ΛΧΡ", "ΛΙΜ"),
+  A_VEG_NAME = c("Ελάτη", "Ερυθρελάτη", "Πεύκη μαύρη", "Πεύκη λευκόδερμη", "Πεύκη δασική",
+                 "Πεύκη χαλέπιος", "Πεύκη κουκουναριά", "Πεύκη θαλασσία", "Κυπαρίσσι",
+                 "Άρκευθος", "Οξυά", "Δρύς", "Καστανιά", "Σημύδα", "Σφένδαμος",
+                 "Φιλύρα", "Φυλλοβόλα πλατύφυλλα", "Παραποτάμια βλάστηση", "Ευκάλυπτος",
+                 "Φοίνικας", "Θάμνοι", "Φυλλοβόλοι θάμνοι", "Λιβάδια, αραιά ξυλ. βλάστηση",
+                 "Άγονα", "Οικισμοί", "Γεωργ. καλλιέργειες", "Γεωργ. καλλιέργειες εγκατ.",
+                 "Λοιπές χρήσεις", "Λίμνη"),
+  stringsAsFactors = FALSE
+)
+
+veg_rast <- vect(vegetation_map)
+
+veg_rast <- project(veg_rast, crs(slope_rast))
+
+veg_rasterized <- rasterize(veg_rast, slope_rast, field = "A_VEG_TYPE")
+
+
+writeRaster(veg_rasterized, "../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.tif")
