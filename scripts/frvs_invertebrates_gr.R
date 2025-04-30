@@ -14,6 +14,7 @@ library(terra)
 library(tidyverse)
 library(ggnewscale)
 library(readxl)
+library(partition)
 library(dismo)
 library(units)
 
@@ -28,7 +29,6 @@ gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") |>
 
 gr_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp") |>
     st_transform(., crs="WGS84")
-
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
@@ -108,7 +108,6 @@ write_delim(species_summary, "../results/species_summary.tsv", delim="\t")
 
 ########################## Parnassius apollo ###########################
 
-
 parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp") |>
     st_transform(crs="WGS84")
 
@@ -120,11 +119,10 @@ apollo_mean <- species_samples_art17_parnasious |>
     dplyr::select(-starts_with("X_hilda_plu")) |>
     summarise(
     across(
-      where(is.numeric),
-      list(mean = mean),
-      na.rm = TRUE
+           where(is.numeric),
+           \(x) mean(x, na.rm = TRUE)
+           )
     )
-  )
 
 
 write_delim(apollo_mean,"../results/apollo_mean.tsv", delim="\t")
@@ -201,3 +199,100 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
        dpi = 300, 
        units="cm",
        device="png")
+
+############## Modeling FRV ##################
+
+## sampling bias
+##
+### # create a SpatRaster with the extent of acgeo
+#r <- rast(acv)
+## set the resolution of the cells to (for example) 1 degree
+#res(r) <- 1
+## extend (expand) the extent of the SpatRaster a little
+#r <- extend(r, ext(r)+1)
+## sample:
+#set.seed(13)
+#acsel <- spatSample(acv, size=1, "random", strata=r)
+## to illustrate the method and show the result
+#p <- as.polygons(r)
+#plot(p, border='gray')
+#points(acv)
+## selected points in red
+#points(acsel, cex=1, col='red', pch='x')
+
+apollo <- species_samples_art17_parnasious |>
+    st_drop_geometry() |>
+    dplyr::select(decimalLatitude,decimalLongitude)
+
+
+apollo_points <- vect(apollo, geom = c("decimalLongitude", "decimalLatitude"), crs = "EPSG:4326")
+
+## pseudo-absences
+
+## colinearity of raster data
+library(corrr)
+species_samples_art17_parnasious_num <- species_samples_art17_parnasious |>
+    st_drop_geometry() |>
+    dplyr::select(where(is.numeric)) |>
+    correlate()
+
+cor_ff <- species_samples_art17_parnasious_num |>
+    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
+    filter(abs(pearson) > 0.5) |>
+    filter(term!=to_term) |>
+    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
+
+############ environmental data
+## raster paths
+gr_1km_terra <- file.path("../spatial_data/eea_reference_grid/gr_1km_terra.tif")
+slope <- file.path("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
+dem <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
+bio12 <- file.path("../spatial_data/world_clim_greece/crop_wc2.1_30s_bio_12.tif")
+bio15 <- file.path("../spatial_data/world_clim_greece/crop_wc2.1_30s_bio_15.tif")
+vegetation_map <- file.path("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.tif")
+
+## load rasters
+gr_1km_rast <- rast(gr_1km_terra)
+slope_rast <- rast(slope)
+dem_rast <- rast(dem)
+bio12_rast <- rast(bio12)
+bio15_rast <- rast(bio15)
+veg_rast <- rast(vegetation_map)
+
+# crop and resample 
+dem_rast_c <- crop(dem_rast,ext(gr_1km_rast))
+bio12_rast_c <- crop(bio12_rast,ext(gr_1km_rast))
+bio15_rast_c <- crop(bio15_rast,ext(gr_1km_rast))
+veg_rast_c <- crop(veg_rast,ext(gr_1km_rast))
+
+
+dem_rast_r <- resample(dem_rast_c,gr_1km_rast)
+bio12_rast_r <- resample(bio12_rast_c,gr_1km_rast)
+bio15_rast_r <- resample(bio15_rast_c,gr_1km_rast)
+veg_rast_r <- resample(veg_rast_c,gr_1km_rast)
+
+# Step 3: Rasterize the polygon (using a specific field to assign values)
+
+## resample with the gr_1km 
+predictors <- c(slope_rast,dem_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)  # Stack the rasters
+## plot
+plot(veg_rasterized)
+points(apollo_points, col='red')
+
+#eea_1km_wgs <- st_transform(eea_1km,4326)
+
+presvals <- extract(predictors, apollo)
+# remove the ID variable
+presvals <- presvals[,-1]
+# setting random seed to always create the same
+# random set of points for this example
+set.seed(0)
+backgr <- spatSample(predictors, 500, "random", as.points=TRUE, na.rm=TRUE)
+absvals <- values(backgr)
+pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
+sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
+
+## Model fitting
+##
+## Model evaluation
+
