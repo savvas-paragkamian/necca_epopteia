@@ -21,7 +21,7 @@ library(ggpubr)
 ### Species occurrences enriched ######
 species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-species_occurrences_sf <- species_occurrences_invertebrates |> 
+points_sf <- species_occurrences_invertebrates |> 
     filter(!is.na(decimalLatitude)) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
@@ -126,7 +126,6 @@ hilda_rast_list <- lapply(hilda_files, function(x) rast(paste0(hilda_path,x,sep=
 
 rasters_list <- list(eu_dem_gr,eu_dem_slope,ecosystem_types_gr) # hilda_rast_list, add later ,world_clim_list
 
-points_sf <- species_occurrences_sf
 
 extract_from_named_rasters <- function(raster_list, points_sf) {
   if (!all(sapply(raster_list, inherits, "SpatRaster"))) {
