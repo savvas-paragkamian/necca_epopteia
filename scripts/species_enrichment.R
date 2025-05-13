@@ -12,7 +12,6 @@
 
 library(sf)
 library(tidyverse)
-library(ggpubr)
 library(readxl)
 library(taxize)
 library(units)
@@ -260,6 +259,12 @@ species_samples_art17_sf <- species_samples_art17 |>
              crs="WGS84")
 
 write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
+
+species_samples_art17_open <- species_samples_art17 |>
+    filter(datasetName!="Invertebrates_records_Olga")
+
+write_delim(species_samples_art17_open,"../results/species_samples_art17_open.tsv", delim="\t")
+
 species_with_data <- unique(species_samples_art17$species)
 
 datasets_colors <- c(
