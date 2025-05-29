@@ -49,6 +49,7 @@ sspecies_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_
 species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 
 
+
 ########################## Flowchart for FRVs ##########################
 # keep only one species name from the synonyms
 species_info <- species_samples_art17 |>
@@ -135,7 +136,7 @@ locations_10_grid_samples <- st_join(gr_10km, species_samples_art17_parnasious, 
 
 
 datasets_colors <- c(
-                     "Gbif"="seagreen",
+                     "GBIF"="seagreen",
                      "NECCA_redlist"="#B31319",
                      "E1X_MDPP_2014_2024"="#FDF79C",
                      "E1X_DB"="#2BA09F",
@@ -242,6 +243,8 @@ cor_ff <- species_samples_art17_parnasious_num |>
     filter(term!=to_term) |>
     filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
 
+
+
 ############ environmental data
 ## raster paths
 gr_1km_terra <- file.path("../spatial_data/eea_reference_grid/gr_1km_terra.tif")
@@ -320,7 +323,7 @@ bc <- envelope(presvals_clean[,c("eudem_dem_4258_europe", "wc2.1_30s_bio_12", "w
 bc
 
 pr <- partialResponse(bc, presvals_clean, "wc2.1_30s_bio_12")
-p <- predict(predictors, m2)
+p <- predict(predictors, m1)
 
 library(RColorBrewer)
 colors <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)

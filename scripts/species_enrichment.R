@@ -41,7 +41,7 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 ##### Gbif data
 
 gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t") |>
-    mutate(datasetName="Gbif") |>
+    mutate(datasetName="GBIF") |>
     rename("submittedName"="species")
 
 ## Define the bounding box coordinates
@@ -268,7 +268,7 @@ write_delim(species_samples_art17_open,"../results/species_samples_art17_open.ts
 species_with_data <- unique(species_samples_art17$species)
 
 datasets_colors <- c(
-                     "Gbif"="seagreen",
+                     "GBIF"="seagreen",
                      "NECCA_redlist"="#B31319",
                      "E1X_MDPP_2014_2024"="#FDF79C",
                      "E1X_DB"="#2BA09F",
