@@ -63,6 +63,8 @@ species_names_combined <- c(
   "Morimus asper",
   "Morimus funereus",
   "Ophiogomphus cecilia",
+  "Osmoderma lassallei",
+  "Osmoderma barnabita",
   "Osmoderma eremita",
   "Osmoderma eremita Complex",
   "Papilio alexanor",
@@ -80,6 +82,7 @@ species_names_combined <- c(
   "Stylurus flavipes",
   "Unio crassus",
   "Unio elongatulus",
+  "Unio pictorum",
   "Vertigo angustior",
   "Vertigo moulinsiana",
   "Zerynthia polyxena"
@@ -157,23 +160,36 @@ format = "SIMPLE_CSV"
 
 # to check the status of the download
 # This is for the species of annex II 
-occ_download_wait('0010753-250415084134356')
+# download on 30/5/2025
+#occ_download_wait('0008134-250525065834625')
+# DOI: 10.15468/dl.d2v94q 
+# OLD download 
 # GBIF.org (23 April 2025) GBIF Occurrence Download  https://doi.org/10.15468/dl.v7ruda
 # Another key for the gbif download of 268 invertegrate species 
 # is 0018673-241107131044228 
 
-#gbif_species_occ <- occ_download_get('0010753-250415084134356') |>
+#gbif_species_occ <- occ_download_get('0008134-250525065834625') |>
 #    occ_download_import()
 
 #write_delim(gbif_species_occ, "../data/gbif_invertebrate_species_occ.tsv", delim="\t")
 
 gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t")
 
+# check which is na in species. 
+gbif_species_occ|> filter(is.na(species))
+
+# 
+gbif_species_occ$species <- ifelse(!is.na(gbif_species_occ$verbatimScientificName) &
+                                    gbif_species_occ$verbatimScientificName=="Panaxia quadripunctaria",
+                                     "Euplagia quadripunctaria",
+                                     as.character(gbif_species_occ$species))
+
 gbif_species_occ_sf <- gbif_species_occ |> 
     st_as_sf(coords=c("decimalLatitude","decimalLongitude"),
              remove=F,
              crs="WGS84") |>
-    st_transform(4326)
+    st_transform(4326) |> 
+    mutate(species=if_else(verbatimScientificName=="Panaxia quadripunctaria","Euplagia quadripunctaria",species))
 
 greece_regions_bbox <- st_as_sf(st_as_sfc(st_bbox(greece_regions)))
 
@@ -202,42 +218,42 @@ ggsave("../figures/gbif_species_map.png",
        units="cm",
        device="png")
 
-## Greece only
+## Greece only the search in country of GBIF resolves this.
 
 # Define the bounding box coordinates
-xmin <- 19.37359
-ymin <- 34.80202
-xmax <- 29.64306
-ymax <- 41.7485
-
-gbif_species_occ_gr <- gbif_species_occ_sf |>
-    filter(decimalLongitude > 19.37359 & decimalLongitude<29.64306,
-           decimalLatitude>34.80202 & decimalLatitude < 41.7485 )
-
-gbif_species_gr_map <- ggplot() +
-    geom_sf(greece_regions, mapping=aes()) +
-    geom_point(gbif_species_occ_gr,
-            mapping=aes(x=decimalLongitude,
-                        y=decimalLatitude,
-                        color=species),
-            size=1.8,
-            alpha=0.8,
-            show.legend=T) +
-    coord_sf(crs="WGS84") +
-    theme_bw()+
-    theme(axis.title=element_blank(),
-          axis.text=element_text(colour="black"),
-          legend.title = element_text(size=8),
-          legend.position = "bottom",
-          legend.box.background = element_blank())
-
-ggsave("../figures/gbif_species_gr_map.png", 
-       plot=gbif_species_gr_map, 
-       height = 40, 
-       width = 40,
-       dpi = 300, 
-       units="cm",
-       device="png")
+#xmin <- 19.37359
+#ymin <- 34.80202
+#xmax <- 29.64306
+#ymax <- 41.7485
+#
+#gbif_species_occ_gr <- gbif_species_occ_sf |>
+#    filter(decimalLongitude > 19.37359 & decimalLongitude<29.64306,
+#           decimalLatitude>34.80202 & decimalLatitude < 41.7485 )
+#
+#gbif_species_gr_map <- ggplot() +
+#    geom_sf(greece_regions, mapping=aes()) +
+#    geom_point(gbif_species_occ_gr,
+#            mapping=aes(x=decimalLongitude,
+#                        y=decimalLatitude,
+#                        color=species),
+#            size=1.8,
+#            alpha=0.8,
+#            show.legend=T) +
+#    coord_sf(crs="WGS84") +
+#    theme_bw()+
+#    theme(axis.title=element_blank(),
+#          axis.text=element_text(colour="black"),
+#          legend.title = element_text(size=8),
+#          legend.position = "bottom",
+#          legend.box.background = element_blank())
+#
+#ggsave("../figures/gbif_species_gr_map.png", 
+#       plot=gbif_species_gr_map, 
+#       height = 40, 
+#       width = 40,
+#       dpi = 300, 
+#       units="cm",
+#       device="png")
 
 ################################## world Clim ####################################
 
