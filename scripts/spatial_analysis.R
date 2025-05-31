@@ -15,18 +15,23 @@ library(tidyverse)
 library(readxl)
 library(units)
 library(ggpubr)
+library(ggnewscale)
 
 ########################## Load Data ##########################
 ###
 ### Species occurrences enriched ######
+species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
 species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-points_sf <- species_occurrences_invertebrates |> 
+points_sf <- species_samples_art17 |> 
     filter(!is.na(decimalLatitude)) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
 
+## distribution data from previous report
+species_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
+species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 ### greece 
 
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
@@ -120,7 +125,7 @@ hilda_all <- list.files(hilda_path)
 hilda_files <- hilda_all[grepl("*.tif", hilda_all)] 
 hilda_rast_list <- lapply(hilda_files, function(x) rast(paste0(hilda_path,x,sep="")))
 
-########################### Extract data to species occurrences ############
+######################## Extract data to species occurrences ####################
 
 ### rasters stack
 
@@ -226,6 +231,388 @@ result <- extract_polygon_info_multi(
 
 species_occurrences_spatial <- result
 write_delim(species_occurrences_spatial,"../results/species_occurrences_spatial.tsv",delim="\t")
+
+
+################################## MAPS ########################################
+################################################################################
+################################################################################
+
+species_with_data <- unique(points_sf$species)
+
+datasets_colors <- c(
+                     "GBIF"="seagreen",
+                     "NECCA_redlist"="#B31319",
+                     "E1X_MDPP_2014_2024"="#FDF79C",
+                     "E1X_DB"="#2BA09F",
+                     "E1X_DB_references"="#141D43",
+                     "Invertebrates_records_Olga"="#F85C29"
+                     )
+
+# base plot with Natura2000 areas of Greece
+natura_colors <- c(
+                   "SCI"="#E69F00",
+                   "SPA"="#56B4E9",
+                   "SCISPA"="#CC79A7"
+)
+
+
+## natura2000
+g_base_n2000 <- ggplot()+
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.3,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                       guide = guide_legend(
+                                            override.aes = list(
+                                                                linetype="solid",
+                                                                shape = NA)
+                                            ),
+                       name="Natura2000"
+                       )+
+    theme_bw()
+
+ggsave("../figures/map_natura.png", 
+           plot=g_base_n2000, 
+           height = 20, 
+           width = 20,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+### natura2000 with all points
+g_art17_n2000 <- g_base_n2000 +
+    geom_point(points_sf,
+            mapping=aes(x=decimalLongitude,
+                        y=decimalLatitude,
+                        color=datasetName),
+            size=1.2,
+            alpha=0.8,
+            show.legend=T) +
+    scale_color_manual(values=datasets_colors,
+                        name = "Datasets")+
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+    theme(legend.position.inside = c(0.87, 0.75)
+    )
+
+
+ggsave("../figures/map_art17_invertebrates_natura.png", 
+           plot=g_art17_n2000, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+
+############################## Species Occurrences ##############################
+
+### figures of each invertebrate of art17 for Greece
+
+for (i in seq_along(species_with_data)){
+    species_occurrences <- points_sf |>
+        filter(species==species_with_data[i])
+
+    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
+    print(species_with_data[i])
+
+    
+    species_gr_map <- g_base_n2000 +
+        geom_point(species_occurrences,
+                mapping=aes(x=decimalLongitude,
+                            y=decimalLatitude,
+                            color=datasetName),
+                size=1.8,
+                alpha=0.9,
+                show.legend=T) +
+        coord_sf(crs="WGS84") +
+        scale_color_manual(values=dataset_colors_f,
+                        name = "Datasets") +
+        guides(
+               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+        ggtitle(paste(species_with_data[i]))+
+        theme_bw()+
+        theme(axis.title=element_blank(),
+              axis.text=element_text(colour="black"),
+              legend.title = element_text(size=8),
+              legend.position.inside = c(0.87, 0.75),
+              legend.box.background = element_blank())
+    
+    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_occurrences.png", sep=""), 
+           plot=species_gr_map, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+}
+
+
+
+
+############################## Species Population ##############################
+### population is defined here as the number of 1X1km cells
+### remove GBIF
+
+for (i in seq_along(species_with_data)){
+    # use the 1X1 as a proxy of population
+
+    species_occurrences <- points_sf |>
+        filter(species==species_with_data[i]) |>
+        filter(datasetName!="GBIF")
+    
+    locations_1_grid_samples <- st_join(eea_1km_wgs, species_occurrences, left=F) |>
+        distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
+        group_by(geometry,CELLCODE) |>
+        summarise(n_samples=n(),.groups="keep")
+
+    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
+
+    print(species_with_data[i])
+
+    
+    species_gr_map <- g_base_n2000 +
+#        geom_point(species_occurrences,
+#                mapping=aes(x=decimalLongitude,
+#                            y=decimalLatitude,
+#                            color=datasetName),
+#                size=1.8,
+#                alpha=0.9,
+#                show.legend=T) +
+#        scale_color_manual(values=dataset_colors_f,
+#                            name = "Datasets")+
+        new_scale_fill()+
+        geom_sf(locations_1_grid_samples, mapping=aes(fill=n_samples),
+                alpha=0.8,
+                colour="transparent",
+                na.rm = F,
+                show.legend=T) +
+        scale_fill_gradient(low="gray50",
+                            high="gray1",
+                            guide = "colourbar")+
+        guides(
+               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)),
+               fill = guide_colourbar(position = "inside",
+                                      alpha = 1,
+                                      ticks = F,
+                                      label = T,
+                                      title="n_samples",
+                                      title.vjust = 0.8,
+                                      order = 1))+
+        theme_bw()+
+        ggtitle(paste(species_with_data[i]))+
+        theme(axis.title=element_blank(),
+              axis.text=element_text(colour="black"),
+              legend.title = element_text(size=8),
+              legend.position.inside = c(0.87,0.65),
+              legend.box.background = element_blank())
+    
+    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_population.png", sep=""), 
+           plot=species_gr_map, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+}
+
+
+############################## Species Distribution ##############################
+
+for (i in seq_along(species_with_data)){
+    # use the 10X10 as a proxy of distribution
+
+    species_occurrences <- points_sf |>
+        filter(species==species_with_data[i]) |>
+        filter(datasetName!="GBIF")
+    
+    locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
+        distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
+        group_by(geometry,CELLCODE) |>
+        summarise(n_samples=n(),.groups="keep")
+
+    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
+
+    print(species_with_data[i])
+
+    
+    species_gr_map <- g_base_n2000 +
+        geom_point(species_occurrences,
+                mapping=aes(x=decimalLongitude,
+                            y=decimalLatitude,
+                            color=datasetName),
+                size=1.8,
+                alpha=0.9,
+                show.legend=T) +
+        scale_color_manual(values=dataset_colors_f,
+                            name = "Datasets")+
+        new_scale_fill()+
+        geom_sf(locations_10_grid_samples, mapping=aes(fill=n_samples),
+                alpha=0.8,
+                colour="transparent",
+                na.rm = F,
+                show.legend=T) +
+        scale_fill_gradient(low="gray50",
+                            high="gray1",
+                            guide = "colourbar")+
+        guides(
+               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)),
+               fill = guide_colourbar(position = "inside",
+                                      alpha = 1,
+                                      ticks = F,
+                                      label = T,
+                                      title="n_samples",
+                                      title.vjust = 0.8,
+                                      order = 1))+
+        theme_bw()+
+        ggtitle(paste(species_with_data[i]))+
+        theme(axis.title=element_blank(),
+              axis.text=element_text(colour="black"),
+              legend.title = element_text(size=8),
+              legend.position.inside = c(0.87,0.65),
+              legend.box.background = element_blank())
+    
+    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_distribution.png", sep=""), 
+           plot=species_gr_map, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+}
+
+################################ Species Range ##############################
+library(igraph)
+
+i=1
+species_occurrences <- points_sf |>
+    filter(species==species_with_data[i]) |>
+    filter(datasetName!="GBIF")
+
+locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
+    distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
+    group_by(geometry,CELLCODE) |>
+    summarise(n_samples=n(),.groups="keep")
+
+grids <- eea_10km_wgs |>
+    filter(CELLCODE %in% locations_10_grid_samples$CELLCODE) |>
+    mutate(cell_origin="distribution")
+
+centroids <- st_centroid(grids)
+dist_matrix <- st_distance(centroids)
+dist_num <- drop_units(dist_matrix) # remove units
+
+# keep the cell code of the grid
+cellcode <- grids$CELLCODE
+
+rownames(dist_num) <- colnames(dist_num) <- cellcode
+
+# STEP 2: Convert distance matrix to a graph where edges are < gap threshold
+gap_distance_u <- set_units(40000, "m")   # e.g., 40 km
+gap_distance <- 40000   # e.g., 40 km
+upper_only <- dist_num
+
+
+# Zero out lower triangle and diagonal because is symmetric
+upper_only[!upper.tri(upper_only)] <- 0
+
+adj_matrix <- upper_only  # copy
+# filter only the cells with shorter gap distance
+adj_matrix[adj_matrix <= 0 | adj_matrix > gap_distance] <- 0
+diag(adj_matrix) <- 0  # Remove self-links
+
+# transform the matrix to edgelsit
+edge_list <- which(adj_matrix != 0, arr.ind = TRUE)
+
+edge_df <- data.frame(from = rownames(adj_matrix)[edge_list[, 1]],
+                      to   = colnames(adj_matrix)[edge_list[, 2]],
+                      weight = adj_matrix[edge_list])
+
+# make geometry
+# Join centroids to edgelist (twice: once for 'from', once for 'to')
+line_list <- mapply(
+                    function(p1, p2) st_linestring(matrix(c(st_coordinates(p1), st_coordinates(p2)), ncol = 2, byrow = TRUE)),
+                    st_geometry(edges$from_geom),
+                    st_geometry(edges$to_geom),
+                    SIMPLIFY = FALSE
+)
+
+# Convert list to sfc and make an sf object
+lines_sf <- st_sf(
+                  from = edges$from,
+                  to = edges$to,
+                  geometry = st_sfc(line_list, crs = st_crs(grids))
+                  )
+
+# Intersect lines with full grid to get "in-between" cells
+intersecting_cells <- st_intersects(eea_10km_wgs, lines_sf, sparse = FALSE)
+
+# 7. Keep only grid cells that intersect at least one line
+filled_cells <- eea_10km_wgs[apply(intersecting_cells, 1, any), ] |>
+    mutate(cell_origin="range")
+
+# Create polygons by merging connected grids
+expanded_grid <- rbind(filled_cells, grids) %>% distinct()
+
+# Maps
+species_gr_map <- ggplot()+
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.3,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                      guide = guide_legend(
+                                            override.aes = list(
+                                                                linetype="solid",
+                                                                shape = NA)
+                                            ),
+                       name="Natura2000"
+                       )+
+    geom_point(species_occurrences,
+            mapping=aes(x=decimalLongitude,
+                        y=decimalLatitude,
+                        color=datasetName),
+            size=1.8,
+            alpha=0.9,
+            show.legend=T) +
+    scale_color_manual(values=dataset_colors_f,
+                        name = "Datasets")+
+    new_scale_fill()+
+    geom_sf(expanded_grid, mapping=aes(fill=cell_origin),
+            alpha=0.8,
+            colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+    ggtitle(paste(species_with_data[i]))+
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position.inside = c(0.87, 0.75),
+          legend.box.background = element_blank())
+
+ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_range.png", sep=""), 
+       plot=species_gr_map, 
+       height = 20, 
+       width = 25,
+       dpi = 300, 
+       units="cm",
+       device="png")
 
 
 ############################## Hilda analysis ##############################
@@ -334,31 +721,3 @@ for (i in 1:length(hilda_files)){
            units="cm",
            device="png")
 }
-
-
-
-######################
-## Define bounding box as sf object for visual checks if needed
-#bbox <- st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = 4326)
-#bbox_sf <- st_as_sfc(bbox)
-#
-## Generate 4 random points inside the bounding box
-#set.seed(123)
-#points_inside <- st_as_sf(data.frame(
-#  id = 1:4,
-#  x = runif(4, xmin, xmax),
-#  y = runif(4, ymin, ymax)
-#), coords = c("x", "y"), crs = 4326)
-#
-## Generate 4 random points outside the bounding box
-#points_outside <- st_as_sf(data.frame(
-#  id = 5:8,
-#  x = c(runif(2, xmin - 10, xmin - 1), runif(2, xmax + 1, xmax + 10)),
-#  y = c(runif(2, ymin - 10, ymin - 1), runif(2, ymax + 1, ymax + 10))
-#), coords = c("x", "y"), crs = 4326)
-#
-## Combine the points into one sf object for easy handling
-#all_points <- rbind(points_inside, points_outside)
-#
-
-
