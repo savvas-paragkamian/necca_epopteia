@@ -39,10 +39,20 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 #################### Species Occurrences Data Homogenisation ###############################
 ############################################################################################
 ##### Gbif data
-
+## data filter for coordinate precision
+print("gbif")
+##
 gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t") |>
     mutate(datasetName="GBIF") |>
-    rename("submittedName"="species")
+    mutate(
+           species = ifelse(!is.na(verbatimScientificName) &
+                                    verbatimScientificName=="Panaxia quadripunctaria",
+                                     "Euplagia quadripunctaria",
+                                     as.character(species))
+    ) |>
+    rename("submittedName"="species") |>
+    filter(coordinateUncertaintyInMeters<1000)
+
 
 ## Define the bounding box coordinates
 #xmin <- 19.37359
@@ -50,11 +60,18 @@ gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", deli
 #xmax <- 29.64306
 #ymax <- 41.7485
 
-print("gbif")
-gbif_species_occ_gr <- gbif_species_occ |>
+gbif_species_occ_sf <- gbif_species_occ |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
+
+
+within_mat <- st_intersects(gbif_species_occ_sf,greece_regions, sparse = FALSE)
+
+gbif_species_occ_sf <- gbif_species_occ_sf[rowSums(within_mat) > 0, ]
+
+gbif_species_occ_gr <- gbif_species_occ_sf |>
+    st_drop_geometry()
 
 print("end gbif")
 
@@ -248,18 +265,54 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
 
 write_delim(species_occurrences_invertebrates, "../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-species_samples_art17 <- species_occurrences_invertebrates |>
-    filter(submittedName %in% species_names_combined) |>
-    left_join(species_taxonomy, by=c("submittedName"="verbatim_name"))
-
-species_samples_art17_sf <- species_samples_art17 |>
+species_occurrences_invertebrates_sf <- species_occurrences_invertebrates |>
     filter(!is.na(decimalLongitude)) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
 
+
+species_samples_art17_all <- species_occurrences_invertebrates |>
+    filter(submittedName %in% species_names_combined) |>
+    left_join(species_taxonomy, by=c("submittedName"="verbatim_name"))
+
+species_samples_art17_sf <- species_samples_art17_all |>
+    filter(!is.na(decimalLongitude)) |>
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
+             remove=F,
+             crs="WGS84")
+
+### find the points that are on land and inside borders of greece
+points <- species_samples_art17_sf
+
+polygons <- greece_regions
+intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
+# Use st_within to get logical vector of which points are inside the multipolygon
+points_outside <- points[rowSums(intersects_mat) == 0, ]
+points_inside_or_touching <- points[rowSums(intersects_mat) > 0, ]
+
+# 1000 meters = 1 km
+nearby_mat <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
+
+# Keep only points within 1 km of any polygon
+points_nearby <- points[rowSums(nearby_mat) > 0, ]
+points_away_2km <- points[rowSums(nearby_mat) == 0, ]
+
+
+
+# plot
+
+plot(st_geometry(polygons), col = NA, border = "blue")
+plot(st_geometry(points), add = TRUE, col = "black", pch = 1)
+plot(st_geometry(points_outside), add = TRUE, col = "red", pch = 16)
+plot(st_geometry(points_nearby), add = TRUE, col = "yellow", pch = 16)
+#plot(st_geometry(species_samples_art17_sf), add = TRUE, col = "blue", pch = 16)
+
+species_samples_art17
+
 write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
 
+#### save
 species_samples_art17_open <- species_samples_art17 |>
     filter(datasetName!="Invertebrates_records_Olga")
 
@@ -315,7 +368,7 @@ ggsave("../figures/map_natura.png",
 
 ### natura2000 with all points
 g_art17_n2000 <- g_base_n2000 +
-    geom_point(species_samples_art17_sf,
+    geom_point(species_samples_art17_open,
             mapping=aes(x=decimalLongitude,
                         y=decimalLatitude,
                         color=datasetName),
@@ -371,7 +424,7 @@ for (i in seq_along(species_with_data)){
               legend.position.inside = c(0.87, 0.75),
               legend.box.background = element_blank())
     
-    ggsave(paste0("../figures/species/map_", species_with_data[i], "_occurrences.png", sep=""), 
+    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_occurrences.png", sep=""), 
            plot=species_gr_map, 
            height = 20, 
            width = 25,
