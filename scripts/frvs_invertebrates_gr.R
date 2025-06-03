@@ -64,49 +64,6 @@ species_art17_spatial <- species_occurrences_spatial |>
              remove=F,
              crs="WGS84")
 
-
-species_art17_spatial_f <- species_art17_spatial |>
-    dplyr::select(submittedName,basisOfRecord,datasetName)
-
-dir.create("../results/species_art17_spatial", recursive = TRUE, showWarnings = FALSE)
-st_write(species_art17_spatial_f,"../results/species_art17_spatial/species_art17_spatial.shp",delete_layer = TRUE)
-
-# summary of resourses
-#
-resources_summary_art17 <- species_samples_art17 |>
-    group_by(datasetName,species) |>
-    summarise(n_occurrences=n(), .groups="keep") |>
-    group_by(datasetName) |>
-    summarise(n_occurrences=sum(n_occurrences), n_species=n())
-
-# what is known for each species
-
-species_points <- species_art17_spatial |>
-    distinct(species,decimalLatitude,decimalLongitude) |>
-    group_by(species) |>
-    summarise(n_points=n())
-
-species_1km <- species_art17_spatial |>
-    distinct(species,CELLCODE_eea_1km) |>
-    group_by(species) |>
-    summarise(n_1km=n())
-
-species_1km_n2000 <- species_art17_spatial |>
-    distinct(species,CELLCODE_eea_1km,SITECODE_N2000_v32_scispa,SITECODE_N2000_v32_spa,SITECODE_N2000_v32_sci) |>
-    group_by(species) |>
-    summarise(across(starts_with("SITECODE"), ~sum(!is.na(.)), .names = "count_{.col}"))
-
-
-species_summary <- species_info |>
-    dplyr::select(-submittedName) |>
-    distinct() |>
-    left_join(species_points) |>
-    left_join(species_1km) |>
-    left_join(species_1km_n2000)
-
-
-write_delim(species_summary, "../results/species_summary.tsv", delim="\t")
-
 ########################## Parnassius apollo ###########################
 
 parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp") |>
