@@ -3,7 +3,13 @@
 ## Script name: spatial_analysis.R
 ##
 ## Purpose of script:
-##
+## 1. Load all spatial data
+## 2. Enrich occurrences with spatial info
+## 3. Filter and quality control based on custom filters
+## 4. Calculation and Maps 
+##      a) species metrics, population, population_n2k, distribution, range
+##      b) Maps
+## 5. HILDA+ analysis
 ##
 ## Author: Savvas Paragkamian
 ##
@@ -19,10 +25,11 @@ library(ggnewscale)
 
 ########################## Load Data ##########################
 ###
-### Species occurrences enriched ######
-species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
-species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
+### Species occurrences integrated ###
+species_samples_art17 <- read_delim("../results/species_samples_art17_all.tsv", delim="\t")
+# species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
+## remove points without coordinates
 points_sf <- species_samples_art17 |> 
     filter(!is.na(decimalLatitude)) |>
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
@@ -34,7 +41,6 @@ species_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2
 species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 
 species_dist_national_rep_wgs <- st_transform(species_dist_national_rep,4326)
-
 
 ## clean the names of the distribution
 ## unique(species_dist_national_rep_wgsa$submittedName)[!(unique(species_dist_national_rep_wgsa$submittedName) %in% unique(points_sf$submittedName))]
@@ -149,90 +155,90 @@ rasters_list <- list(eu_dem_gr,eu_dem_slope,ecosystem_types_gr) # hilda_rast_lis
 
 
 extract_from_named_rasters <- function(raster_list, points_sf) {
-  if (!all(sapply(raster_list, inherits, "SpatRaster"))) {
-    stop("All items in raster_list must be terra SpatRaster objects.")
-  }
-
-  # Get names of each raster in the list
-  raster_names <- names(raster_list)
-
-  # Convert sf to terra::vect
-  vect_points <- terra::vect(points_sf)
-
-  # Loop through rasters and extract
-  extracted_list <- lapply(seq_along(raster_list), function(i) {
-    r <- raster_list[[i]]
-    vals <- terra::extract(r, vect_points)[, -1, drop = FALSE]
-
-    # Generate nice column names using object name and band names
-    layer_names <- names(r)
-    if (is.null(layer_names) || any(layer_names == "")) {
-      layer_names <- paste0("band", seq_len(ncol(vals)))
+    if (!all(sapply(raster_list, inherits, "SpatRaster"))) {
+        stop("All items in raster_list must be terra SpatRaster objects.")
     }
-
-    prefix <- raster_names[i]
-    colnames(vals) <- paste0(prefix, "_", layer_names)
-
-    return(vals)
-  })
-
-  # Combine all extracted values
-  all_extracted <- do.call(cbind, extracted_list)
-
-  # Add to sf object
-  result_sf <- cbind(points_sf, all_extracted)
-
-  return(result_sf)
+  
+    # Get names of each raster in the list
+    raster_names <- names(raster_list)
+  
+    # Convert sf to terra::vect
+    vect_points <- terra::vect(points_sf)
+  
+    # Loop through rasters and extract
+    extracted_list <- lapply(seq_along(raster_list), function(i) {
+        r <- raster_list[[i]]
+        vals <- terra::extract(r, vect_points)[, -1, drop = FALSE]
+  
+        # Generate nice column names using object name and band names
+        layer_names <- names(r)
+        if (is.null(layer_names) || any(layer_names == "")) {
+          layer_names <- paste0("band", seq_len(ncol(vals)))
+        }
+  
+        prefix <- raster_names[i]
+        colnames(vals) <- paste0(prefix, "_", layer_names)
+  
+        return(vals)
+    })
+  
+    # Combine all extracted values
+    all_extracted <- do.call(cbind, extracted_list)
+  
+    # Add to sf object
+    result_sf <- cbind(points_sf, all_extracted)
+  
+    return(result_sf)
 }
 
 
 results_ext <- extract_from_named_rasters(rasters_list,points_sf)
 results_ext_2 <- extract_from_named_rasters(world_clim_list,results_ext)
-results_ext_3 <- extract_from_named_rasters(hilda_rast_list,results_ext_2)
 
 
 ### shapefiles
 
 extract_polygon_info_multi <- function(points_sf, polygons_list, suffixes = NULL) {
-  if (!inherits(points_sf, "sf")) stop("points_sf must be an sf object.")
-  if (!is.list(polygons_list)) stop("polygons_list must be a list of sf objects.")
+    if (!inherits(points_sf, "sf")) stop("points_sf must be an sf object.")
+    if (!is.list(polygons_list)) stop("polygons_list must be a list of sf objects.")
+    
+    result <- points_sf
+    
+    for (i in seq_along(polygons_list)) {
+        poly_sf <- polygons_list[[i]]
+        if (!inherits(poly_sf, "sf")) stop(paste0("Item ", i, " in polygons_list is not an sf object."))
+        
+        # Perform spatial join
+        print(polygons_list[i])
+        joined <- st_join(result, poly_sf, join = st_within, left = TRUE, largest = FALSE)
+        
+        # Detect new columns added by join (excluding geometry)
+        new_cols <- setdiff(names(joined), names(result))
+        new_cols <- new_cols[new_cols != attr(joined, "sf_column")]  # exclude geometry column
+        
+        # If no new columns, skip this layer
+        if (length(new_cols) == 0) {
+          warning(paste("No new columns added from polygon layer", i, "- skipping."))
+          next
+        }
   
-  result <- points_sf
-  
-  for (i in seq_along(polygons_list)) {
-    poly_sf <- polygons_list[[i]]
-    if (!inherits(poly_sf, "sf")) stop(paste0("Item ", i, " in polygons_list is not an sf object."))
-    
-    # Perform spatial join
-    print(polygons_list[i])
-    joined <- st_join(result, poly_sf, join = st_within, left = TRUE, largest = FALSE)
-    
-    # Detect new columns added by join (excluding geometry)
-    new_cols <- setdiff(names(joined), names(result))
-    new_cols <- new_cols[new_cols != attr(joined, "sf_column")]  # exclude geometry column
-    
-    # If no new columns, skip this layer
-    if (length(new_cols) == 0) {
-      warning(paste("No new columns added from polygon layer", i, "- skipping."))
-      next
+        # Add suffixes to new columns
+        suffix <- if (!is.null(suffixes) && length(suffixes) >= i) suffixes[i] else paste0("poly", i)
+        names(joined)[names(joined) %in% new_cols] <- paste0(new_cols, "_", suffix)
+        
+        # Drop geometry to avoid duplication
+        joined_no_geom <- joined %>% st_drop_geometry()
+        
+        # Append only the new columns
+        result <- bind_cols(result, joined_no_geom[, paste0(new_cols, "_", suffix), drop = FALSE])
     }
-
-    # Add suffixes to new columns
-    suffix <- if (!is.null(suffixes) && length(suffixes) >= i) suffixes[i] else paste0("poly", i)
-    names(joined)[names(joined) %in% new_cols] <- paste0(new_cols, "_", suffix)
     
-    # Drop geometry to avoid duplication
-    joined_no_geom <- joined %>% st_drop_geometry()
-    
-    # Append only the new columns
-    result <- bind_cols(result, joined_no_geom[, paste0(new_cols, "_", suffix), drop = FALSE])
-  }
-  
-  return(result)
+    return(result)
 }
 
+####################### extract ####################### 
 result <- extract_polygon_info_multi(
-  results_ext_3,
+  results_ext_2,
   polygons_list <- list(eea_1km_wgs,
                       eea_10km_wgs,
                       N2000_v32_wgs_sci,
@@ -243,17 +249,140 @@ result <- extract_polygon_info_multi(
   suffixes = c("eea_1km","eea_10km","N2000_v32_sci","N2000_v32_spa","N2000_v32_scispa","vegetation_map","EUNIS_Habitats")
 )
 
-
-
 species_occurrences_spatial <- result
 write_delim(species_occurrences_spatial,"../results/species_occurrences_spatial.tsv",delim="\t")
+
+############################# Filtering and Quality ############################
+################################################################################
+
+######################### 1. Borders filtering #########################
+## filter points based on polygon
+## return points that are intersecting with polygon
+
+### find the points that are on land and inside borders of greece
+points <- species_occurrences_spatial
+
+polygons <- greece_regions
+intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
+# Use st_within to get logical vector of which points are inside the multipolygon
+points_outside <- points[rowSums(intersects_mat) == 0, ]
+points_inside_or_touching <- points[rowSums(intersects_mat) > 0, ]
+
+# check the distance
+# 1000 meters = 1 km
+nearby_mat <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
+
+# Keep only points within 1 km of any polygon
+points_nearby <- points[rowSums(nearby_mat) > 0, ]
+points_away_2km <- points[rowSums(nearby_mat) == 0, ]
+
+# plot
+
+points_gr_plot <- ggplot() +
+  geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
+  geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
+  geom_sf(data = points_outside, aes(color = "Points away"), shape = 16, show.legend = TRUE) +
+  geom_sf(data = points_away_2km, aes(color = "Points away > 2km"), shape = 2, show.legend = TRUE) +
+  scale_color_manual(
+    name = "Feature Type",
+    values = c(
+      "Gr borders" = "blue",
+      "Points" = "black",
+      "Points away > 2km" = "yellow",
+      "Points away" = "red"
+    )
+  ) +
+  theme_bw()
+
+ggsave(plot=points_gr_plot,
+       "../figures/map_occurrences_borders_filtering.png", width = 8, height = 7, dpi = 300)
+
+### keep only Greece and land points#
+### remove 48 points
+
+points_gr <- points_inside_or_touching
+
+
+##################### 2. Species specific filtering #########################
+
+points_gr_s <- points_gr
+### Parnassius apollo
+points_gr_s <- points_gr_s |>
+    filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 600))
+# this removes 6 points of P. apollo that are below 600 altitude.
+
+
+
+
+
+
+
+
+
+
+
+
+
+points_final
+################################ FINAL DATASET EXPORT ############################
+
+species_samples_art17 <- points_final |>
+    st_drop_geometry()
+
+write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
+
+#### save
+species_samples_art17_open <- species_samples_art17 |>
+    filter(datasetName!="Invertebrates_records_Olga")
+
+write_delim(species_samples_art17_open,"../results/species_samples_art17_open.tsv", delim="\t")
+
+
+dir.create("../results/species_art17_main", recursive = TRUE, showWarnings = FALSE)
+st_write(species_art17_spatial_f,"../results/species_art17_main/species_art17_main.shp",delete_layer = TRUE)
+
+########## species metrics, population, population_n2k, distribution, range###############
+# summary of resourses
+#
+resources_summary_art17 <- species_samples_art17 |>
+    group_by(datasetName,species) |>
+    summarise(n_occurrences=n(), .groups="keep") |>
+    group_by(datasetName) |>
+    summarise(n_occurrences=sum(n_occurrences), n_species=n())
+
+# what is known for each species
+
+species_points <- species_art17_spatial |>
+    distinct(species,decimalLatitude,decimalLongitude) |>
+    group_by(species) |>
+    summarise(n_points=n())
+
+species_1km <- species_art17_spatial |>
+    distinct(species,CELLCODE_eea_1km) |>
+    group_by(species) |>
+    summarise(n_1km=n())
+
+species_1km_n2000 <- species_art17_spatial |>
+    distinct(species,CELLCODE_eea_1km,SITECODE_N2000_v32_scispa,SITECODE_N2000_v32_spa,SITECODE_N2000_v32_sci) |>
+    group_by(species) |>
+    summarise(across(starts_with("SITECODE"), ~sum(!is.na(.)), .names = "count_{.col}"))
+
+
+species_summary <- species_info |>
+    dplyr::select(-submittedName) |>
+    distinct() |>
+    left_join(species_points) |>
+    left_join(species_1km) |>
+    left_join(species_1km_n2000)
+
+
+write_delim(species_summary, "../results/species_summary.tsv", delim="\t")
 
 
 ################################## MAPS ########################################
 ################################################################################
-################################################################################
 
-species_with_data <- unique(points_sf$species)
+species_with_data <- unique(points_final$species)
 
 datasets_colors <- c(
                      "GBIF"="seagreen",
@@ -301,7 +430,7 @@ ggsave("../figures/map_natura.png",
 
 ### natura2000 with all points
 g_art17_n2000 <- g_base_n2000 +
-    geom_point(points_sf,
+    geom_point(points_final,
             mapping=aes(x=decimalLongitude,
                         y=decimalLatitude,
                         color=datasetName),
@@ -331,7 +460,7 @@ ggsave("../figures/map_art17_invertebrates_natura.png",
 ### figures of each invertebrate of art17 for Greece
 
 for (i in seq_along(species_with_data)){
-    species_occurrences <- points_sf |>
+    species_occurrences <- points_final |>
         filter(species==species_with_data[i])
 
     dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
@@ -381,7 +510,7 @@ for (i in seq_along(species_with_data)){
 for (i in seq_along(species_with_data)){
     # use the 1X1 as a proxy of population
 
-    species_occurrences <- points_sf |>
+    species_occurrences <- points_final |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
     
@@ -464,7 +593,7 @@ for (i in seq_along(species_with_data)){
 for (i in seq_along(species_with_data)){
     # use the 10X10 as a proxy of distribution
 
-    species_occurrences <- points_sf |>
+    species_occurrences <- points_final |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
 
@@ -624,13 +753,14 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
     return(expanded_grid)
 }
 
-# calculate reange for all species
+# calculate range for all species
 
 species_range = list()
+polygons_no_points_all <- list()
 
 for (i in seq_along(species_with_data)){
     #i=1
-    species_occurrences <- points_sf |>
+    species_occurrences <- points_final |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
     
@@ -644,6 +774,7 @@ for (i in seq_along(species_with_data)){
     points_index <- lengths(dist_int) > 0 
     polygons_without_points <- species_dist[no_points_index, ] 
     polygons__points <- species_dist[points_index, ] 
+    polygons_no_points_all[[i]]<- polygons_without_points
 
     dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
     locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
@@ -731,6 +862,11 @@ for (i in seq_along(species_with_data)){
     
 }
 
+orphan_cells_combined <- bind_rows(polygons_no_points_all, .id = "species")
+
+orphan_cells_combined_summary <- orphan_cells_combined |>
+    group_by(submittedName) |>
+    summarise(n_orphan_cells=n())
 
 species_range_combined <- bind_rows(species_range, .id = "species")
 st_write(species_range_combined, "../results/species_range_combined.gpkg",
@@ -738,6 +874,10 @@ st_write(species_range_combined, "../results/species_range_combined.gpkg",
 #species_range_trimmed <- 
 
 ############################## Hilda analysis ##############################
+
+results_ext_3 <- extract_from_named_rasters(hilda_rast_list,species_samples_art17)
+
+
 for (i in 1:length(hilda_files)){
     print(i)
     filename <- hilda_files[i]
