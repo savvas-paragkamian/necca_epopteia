@@ -77,6 +77,10 @@ population_summary <- population |>
 population_distinct <- population |>
     distinct(species,CELLCODE_1,geometry)
 
+st_write(population_distinct,
+         "../anadoxos_deliverables/population_distinct.gpkg",
+         layer = "population",
+         delete_layer = TRUE)
 #### there are duplicate cells 
 
 population_distinct_area <- population |>
@@ -112,6 +116,14 @@ no_intersection_shp <- population_distinct[no_intersection_index, ]
 population_distinct_n2k <- population_distinct |> 
     mutate(n2k = lengths(intersection) > 0)
 
+population_distinct_n2k_only <- population_distinct_n2k |>
+    filter(n2k==TRUE)
+
+st_write(population_distinct_n2k_only,
+         "../anadoxos_deliverables/population_distinct_n2k.gpkg",
+         layer = "n2k",
+         delete_layer = TRUE)
+
 nrow(intersection_shp) + nrow(no_intersection_shp)==nrow(population_distinct)
 
 
@@ -127,6 +139,7 @@ population_distinct_n2k_area <- population_distinct_n2k |>
               total_area=round(drop_units(sum(area)),digits=2),
               total_area_tr=round(drop_units(sum(area_tr)),digits=2))
 
+write_delim(population_distinct_n2k_area, "../anadoxos_deliverables/population_distinct_n2k_area.tsv",delim="\t")
 
 ### validate with map
 
