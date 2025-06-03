@@ -244,6 +244,10 @@ iucn_art17_invert_all <- iucn_art17_invert_summary |>
     rename("submittedName"="scientificName")
 
 write_delim(iucn_art17_invert_all, "../results/iucn_art17_invert_all.tsv", delim="\t")
+########################### Stenobothrus eurasius ###########################
+
+stenobothrus_eurasius <- read_delim("../data/stenobothrus_eurasius.tsv",delim="\t")
+
 ############################# Species data integration ###################
 ### common column names
 columns_to_keep <- c("submittedName",
@@ -258,6 +262,7 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
                                     E1X_DB_select,
                                     E1X_DB_ref_all,
                                     necca_redlist_points_df,
+                                    stenobothrus_eurasius,
                                     Invertebrates_records_Olga) |>
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
     bind_rows() 
@@ -265,173 +270,11 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
 
 write_delim(species_occurrences_invertebrates, "../results/species_occurrences_invertebrates.tsv",delim="\t")
 
-species_occurrences_invertebrates_sf <- species_occurrences_invertebrates |>
-    filter(!is.na(decimalLongitude)) |>
-    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
-             remove=F,
-             crs="WGS84")
-
+## only species art17
 
 species_samples_art17_all <- species_occurrences_invertebrates |>
     filter(submittedName %in% species_names_combined) |>
     left_join(species_taxonomy, by=c("submittedName"="verbatim_name"))
 
-species_samples_art17_sf <- species_samples_art17_all |>
-    filter(!is.na(decimalLongitude)) |>
-    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
-             remove=F,
-             crs="WGS84")
-
-### find the points that are on land and inside borders of greece
-points <- species_samples_art17_sf
-
-polygons <- greece_regions
-intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
-# Use st_within to get logical vector of which points are inside the multipolygon
-points_outside <- points[rowSums(intersects_mat) == 0, ]
-points_inside_or_touching <- points[rowSums(intersects_mat) > 0, ]
-
-# 1000 meters = 1 km
-nearby_mat <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
-
-# Keep only points within 1 km of any polygon
-points_nearby <- points[rowSums(nearby_mat) > 0, ]
-points_away_2km <- points[rowSums(nearby_mat) == 0, ]
-
-
-
-# plot
-
-plot(st_geometry(polygons), col = NA, border = "blue")
-plot(st_geometry(points), add = TRUE, col = "black", pch = 1)
-plot(st_geometry(points_outside), add = TRUE, col = "red", pch = 16)
-plot(st_geometry(points_nearby), add = TRUE, col = "yellow", pch = 16)
-#plot(st_geometry(species_samples_art17_sf), add = TRUE, col = "blue", pch = 16)
-
-species_samples_art17
-
-write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
-
-#### save
-species_samples_art17_open <- species_samples_art17 |>
-    filter(datasetName!="Invertebrates_records_Olga")
-
-write_delim(species_samples_art17_open,"../results/species_samples_art17_open.tsv", delim="\t")
-
-species_with_data <- unique(species_samples_art17$species)
-
-datasets_colors <- c(
-                     "GBIF"="seagreen",
-                     "NECCA_redlist"="#B31319",
-                     "E1X_MDPP_2014_2024"="#FDF79C",
-                     "E1X_DB"="#2BA09F",
-                     "E1X_DB_references"="#141D43",
-                     "Invertebrates_records_Olga"="#F85C29"
-                     )
-# load natura
-N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
-
-N2000_v32_wgs <- st_transform(N2000_v32,4326)
-
-
-# base plot with Natura2000 areas of Greece
-natura_colors <- c(
-                   "SCI"="#E69F00",
-                   "SPA"="#56B4E9",
-                   "SCISPA"="#CC79A7"
-)
-
-g_base_n2000 <- ggplot()+
-    geom_sf(greece_regions, mapping=aes()) +
-    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
-            alpha=0.3,
-            #colour="transparent",
-            na.rm = F,
-            show.legend=T) +
-    scale_fill_manual(
-                      values= natura_colors,
-                       guide = guide_legend(
-                                            override.aes = list(
-                                                                linetype="solid",
-                                                                shape = NA)
-                                            ),
-                       name="Natura2000"
-                       )+
-    theme_bw()
-ggsave("../figures/map_natura.png", 
-           plot=g_base_n2000, 
-           height = 20, 
-           width = 20,
-           dpi = 300, 
-           units="cm",
-           device="png")
-
-### natura2000 with all points
-g_art17_n2000 <- g_base_n2000 +
-    geom_point(species_samples_art17_open,
-            mapping=aes(x=decimalLongitude,
-                        y=decimalLatitude,
-                        color=datasetName),
-            size=1.2,
-            alpha=0.8,
-            show.legend=T) +
-    scale_color_manual(values=datasets_colors,
-                        name = "Datasets")+
-    guides(
-           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
-           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
-    theme(legend.position.inside = c(0.87, 0.75)
-    )
-
-
-ggsave("../figures/map_art17_invertebrates_natura.png", 
-           plot=g_art17_n2000, 
-           height = 20, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-
-### figures of each invertebrate of art17 for Greece
-
-for (i in seq_along(species_with_data)){
-    species_occurrences <- species_samples_art17_sf |>
-        filter(species==species_with_data[i])
-
-    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
-    print(species_with_data[i])
-
-    
-    species_gr_map <- g_base_n2000 +
-        geom_point(species_occurrences,
-                mapping=aes(x=decimalLongitude,
-                            y=decimalLatitude,
-                            color=datasetName),
-                size=1.8,
-                alpha=0.9,
-                show.legend=T) +
-        coord_sf(crs="WGS84") +
-        scale_color_manual(values=dataset_colors_f,
-                        name = "Datasets") +
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
-               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
-        ggtitle(paste(species_with_data[i]))+
-        theme_bw()+
-        theme(axis.title=element_blank(),
-              axis.text=element_text(colour="black"),
-              legend.title = element_text(size=8),
-              legend.position.inside = c(0.87, 0.75),
-              legend.box.background = element_blank())
-    
-    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_occurrences.png", sep=""), 
-           plot=species_gr_map, 
-           height = 20, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-
-}
-
+write_delim(species_samples_art17_all,"../results/species_samples_art17_all.tsv", delim="\t")
 
