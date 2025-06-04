@@ -42,6 +42,8 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 ## data filter for coordinate precision
 print("gbif")
 ##
+gbif_all <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t") 
+
 gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t") |>
     mutate(datasetName="GBIF") |>
     mutate(
