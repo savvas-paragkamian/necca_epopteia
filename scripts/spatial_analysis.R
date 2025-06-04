@@ -26,15 +26,27 @@ library(ggnewscale)
 ########################## Load Data ##########################
 ###
 ### Species occurrences integrated ###
-species_samples_art17 <- read_delim("../results/species_samples_art17_all.tsv", delim="\t")
+species_samples_art17_all <- read_delim("../results/species_samples_art17_all.tsv", delim="\t")
 # species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
 ## remove points without coordinates
-points_sf <- species_samples_art17 |> 
+### distinct all points
+
+points_duplicates <- species_samples_art17_all |>
     filter(!is.na(decimalLatitude)) |>
+    group_by(across(everything())) |>
+    summarise(n = n(), .groups = "drop") |>
+    filter(n>1)
+
+points_sf <- species_samples_art17_all |> 
+    filter(!is.na(decimalLatitude)) |>
+    distinct(across(everything())) |> 
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
+## sanity check
+
+nrow(species_samples_art17_all |> filter(!is.na(decimalLatitude)) ) == nrow(points_sf) + sum(points_duplicates$n) - nrow(points_duplicates)
 
 ## distribution data from previous report
 species_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
@@ -254,13 +266,12 @@ write_delim(species_occurrences_spatial,"../results/species_occurrences_spatial.
 
 ############################# Filtering and Quality ############################
 ################################################################################
+points <- species_occurrences_spatial
 
-######################### 1. Borders filtering #########################
 ## filter points based on polygon
 ## return points that are intersecting with polygon
 
 ### find the points that are on land and inside borders of greece
-points <- species_occurrences_spatial
 
 polygons <- greece_regions
 intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
@@ -279,41 +290,41 @@ points_away_2km <- points[rowSums(nearby_mat) == 0, ]
 # plot
 
 points_gr_plot <- ggplot() +
-  geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
-  geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
-  geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
-  geom_sf(data = points_outside, aes(color = "Points away"), shape = 1, show.legend = TRUE) +
-  geom_sf(data = points_away_2km, aes(color = "Points away > 2km"),size=0.5,  show.legend = TRUE) +
-  scale_color_manual(
-    name = "Feature Type",
-    values = c(
-      "Gr borders" = "blue",
-      "Points" = "black",
-      "Points away > 2km" = "yellow",
-      "Points away" = "red"
-    )
-  ) +
-  theme_bw()
+    geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
+    geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
+    geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_outside, aes(color = "Points away"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_away_2km, aes(color = "Points away > 2km"),size=0.5,  show.legend = TRUE) +
+    scale_color_manual(
+      name = "Feature Type",
+      values = c(
+        "Gr borders" = "blue",
+        "Points" = "black",
+        "Points away > 2km" = "yellow",
+        "Points away" = "red"
+      )
+    ) +
+    theme_bw()
 
 ggsave(plot=points_gr_plot,
        "../figures/map_occurrences_borders_filtering.png", width = 8, height = 7, dpi = 300)
 
 ## only the far away
 points_gr_away_plot <- ggplot() +
-  geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
-  geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
-  geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
-  geom_sf(data = points_away_2km, aes(color = species),size=0.5,  show.legend = TRUE) +
-#  scale_color_manual(
-#    name = "Feature Type",
-#    values = c(
-#      "Gr borders" = "blue",
-#      "Points" = "black",
-#      "Points away > 2km" = "yellow",
-#      "Points away" = "red"
-#    )
-#  ) +
-  theme_bw()
+    geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
+    geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
+    geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_away_2km, aes(color = species),size=0.5,  show.legend = TRUE) +
+  #  scale_color_manual(
+  #    name = "Feature Type",
+  #    values = c(
+  #      "Gr borders" = "blue",
+  #      "Points" = "black",
+  #      "Points away > 2km" = "yellow",
+  #      "Points away" = "red"
+  #    )
+  #  ) +
+    theme_bw()
 
 ggsave(plot=points_gr_away_plot,
        "../figures/map_occurrences_borders_filtering_away.png", width = 8, height = 7, dpi = 300)
@@ -328,29 +339,31 @@ points_gr <- points_inside_or_touching
 points_gr_s <- points_gr
 ### Parnassius apollo
 points_gr_s <- points_gr_s |>
-    filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 600))
-# this removes 6 points of P. apollo that are below 600 altitude.
+    filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 450))
+# this removes points of P. apollo that are below 450 altitude, from red list assessment.
 
 ### Phengaris arion
 ###
 ###
 ### Zerynthia polyxena
-###
+### remove the occurrences from Crete, and south Aegean in general
+### because it is consindered as a different species
 
-###
+points_gr_s_z <- points_gr_s |>
+    filter(!(species == "Zerynthia polyxena" & decimalLatitude < 36))
+
+### rename Hirudo medicinalis to Hirudo verbana
+points_gr_s_z_h <- points_gr_s_z |>
+    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |> 
+    mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) |> 
+    mutate(species = gsub("Osmoderma eremita","Osmoderma lassallei",species))
+### eremita => lassallei
+### Paracossulus => Catopta
+
 ### Unio pictorum
 
 
-
-
-
-
-
-
-
-
-
-points_final <- points_gr_s
+points_final <- points_gr_s_z_h
 ################################ FINAL DATASET EXPORT ############################
 
 species_samples_art17 <- points_final |>
