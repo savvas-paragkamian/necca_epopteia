@@ -279,10 +279,11 @@ points_away_2km <- points[rowSums(nearby_mat) == 0, ]
 # plot
 
 points_gr_plot <- ggplot() +
+  geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
   geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
   geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
-  geom_sf(data = points_outside, aes(color = "Points away"), shape = 16, show.legend = TRUE) +
-  geom_sf(data = points_away_2km, aes(color = "Points away > 2km"), shape = 2, show.legend = TRUE) +
+  geom_sf(data = points_outside, aes(color = "Points away"), shape = 1, show.legend = TRUE) +
+  geom_sf(data = points_away_2km, aes(color = "Points away > 2km"),size=0.5,  show.legend = TRUE) +
   scale_color_manual(
     name = "Feature Type",
     values = c(
@@ -297,6 +298,25 @@ points_gr_plot <- ggplot() +
 ggsave(plot=points_gr_plot,
        "../figures/map_occurrences_borders_filtering.png", width = 8, height = 7, dpi = 300)
 
+## only the far away
+points_gr_away_plot <- ggplot() +
+  geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
+  geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
+  geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
+  geom_sf(data = points_away_2km, aes(color = species),size=0.5,  show.legend = TRUE) +
+#  scale_color_manual(
+#    name = "Feature Type",
+#    values = c(
+#      "Gr borders" = "blue",
+#      "Points" = "black",
+#      "Points away > 2km" = "yellow",
+#      "Points away" = "red"
+#    )
+#  ) +
+  theme_bw()
+
+ggsave(plot=points_gr_away_plot,
+       "../figures/map_occurrences_borders_filtering_away.png", width = 8, height = 7, dpi = 300)
 ### keep only Greece and land points#
 ### remove 48 points
 
@@ -311,6 +331,14 @@ points_gr_s <- points_gr_s |>
     filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 600))
 # this removes 6 points of P. apollo that are below 600 altitude.
 
+### Phengaris arion
+###
+###
+### Zerynthia polyxena
+###
+
+###
+### Unio pictorum
 
 
 
@@ -322,8 +350,7 @@ points_gr_s <- points_gr_s |>
 
 
 
-
-points_final
+points_final <- points_gr_s
 ################################ FINAL DATASET EXPORT ############################
 
 species_samples_art17 <- points_final |>
@@ -337,11 +364,16 @@ species_samples_art17_open <- species_samples_art17 |>
 
 write_delim(species_samples_art17_open,"../results/species_samples_art17_open.tsv", delim="\t")
 
+# Ensure character columns are in UTF-8
+points_final[] <- lapply(points_final, function(x) {
+                             if (is.character(x)) Encoding(x) <- "UTF-8"
+                             return(x)
+})
 
-dir.create("../results/species_art17_main", recursive = TRUE, showWarnings = FALSE)
-st_write(species_art17_spatial_f,"../results/species_art17_main/species_art17_main.shp",delete_layer = TRUE)
+# Then write
+st_write(points_final, "../results/species_samples_art17.gpkg", layer = "species_samples_art17", delete_layer = TRUE)
 
-########## species metrics, population, population_n2k, distribution, range###############
+############## species metrics, population, population_n2k, distribution, range###############
 # summary of resourses
 #
 resources_summary_art17 <- species_samples_art17 |>
@@ -352,17 +384,20 @@ resources_summary_art17 <- species_samples_art17 |>
 
 # what is known for each species
 
-species_points <- species_art17_spatial |>
+species_info <- species_samples_art17 |>
+    distinct(species,submittedName,genus,family,phylum)
+
+species_points <- species_samples_art17 |>
     distinct(species,decimalLatitude,decimalLongitude) |>
     group_by(species) |>
     summarise(n_points=n())
 
-species_1km <- species_art17_spatial |>
+species_1km <- species_samples_art17 |>
     distinct(species,CELLCODE_eea_1km) |>
     group_by(species) |>
     summarise(n_1km=n())
 
-species_1km_n2000 <- species_art17_spatial |>
+species_1km_n2000 <- species_samples_art17 |>
     distinct(species,CELLCODE_eea_1km,SITECODE_N2000_v32_scispa,SITECODE_N2000_v32_spa,SITECODE_N2000_v32_sci) |>
     group_by(species) |>
     summarise(across(starts_with("SITECODE"), ~sum(!is.na(.)), .names = "count_{.col}"))
@@ -862,15 +897,65 @@ for (i in seq_along(species_with_data)){
     
 }
 
+#### summary
 orphan_cells_combined <- bind_rows(polygons_no_points_all, .id = "species")
 
 orphan_cells_combined_summary <- orphan_cells_combined |>
     group_by(submittedName) |>
     summarise(n_orphan_cells=n())
 
+
+orphan_cells_gr_map <- ggplot()+
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.6,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                      guide = guide_legend(
+                                            override.aes = list(alpha=1,
+                                                                linetype="solid",
+                                                                shape = NA)
+                                            ),
+                       name="Natura2000"
+                       )+
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(alpha=1, linetype = 0,color=NA)),
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+    new_scale_fill()+
+    geom_sf(orphan_cells_combined_summary, mapping=aes(fill=submittedName),
+            alpha=0.8,
+            colour="black",
+            na.rm = F) +
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
+    ggtitle(paste(species_with_data[i]))+
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position.inside = c(0.87, 0.65),
+          legend.box.background = element_blank())
+
+ggsave(paste0("../figures/map_orphan_cells.png", sep=""), 
+       plot=orphan_cells_gr_map, 
+       height = 20, 
+       width = 25,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
+
+
+
 species_range_combined <- bind_rows(species_range, .id = "species")
 st_write(species_range_combined, "../results/species_range_combined.gpkg",
          layer = "species_range", driver = "GPKG", delete_layer = TRUE)
+
+
+
 #species_range_trimmed <- 
 
 ############################## Hilda analysis ##############################
