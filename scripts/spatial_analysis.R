@@ -12,6 +12,8 @@
 ## 5. HILDA+ analysis
 ##
 ## Author: Savvas Paragkamian
+## 
+## Runtime: 26 minutes
 ##
 ## Date Created: 2024-11-06
 
@@ -51,6 +53,11 @@ nrow(species_samples_art17_all |> filter(!is.na(decimalLatitude)) ) == nrow(poin
 ## distribution data from previous report
 species_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
 species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
+
+## merge the two distributions
+
+species_dist_national_rep <- rbind(species_dist_national_rep,species_dist_national_rep_sens)
+##
 
 species_dist_national_rep_wgs <- st_transform(species_dist_national_rep,4326)
 
@@ -274,64 +281,75 @@ points <- species_occurrences_spatial
 ### find the points that are on land and inside borders of greece
 
 polygons <- greece_regions
-intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
+#intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
 # Use st_within to get logical vector of which points are inside the multipolygon
-points_outside <- points[rowSums(intersects_mat) == 0, ]
-points_inside_or_touching <- points[rowSums(intersects_mat) > 0, ]
+#points_outside <- points[rowSums(intersects_mat) == 0, ]
 
 # check the distance
 # 1000 meters = 1 km
-nearby_mat <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
+#mat_2000 <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
+#mat_500 <- st_is_within_distance(points, polygons, dist = 500, sparse = FALSE)
 
-# Keep only points within 1 km of any polygon
-points_nearby <- points[rowSums(nearby_mat) > 0, ]
-points_away_2km <- points[rowSums(nearby_mat) == 0, ]
 
+# the distance from land and borders of Greece 
+# for the points that are outside, keep points within 500 meters.
+dist_matrix <- st_distance(points, polygons)
+points$min_dist_m <- apply(dist_matrix, 1, min)
+
+# points inside
+points_inside_or_touching <- points[points$min_dist_m ==0, ]
+
+# Keep only points within 500, 2000 m of any polygon
+points_2000m <- points[points$min_dist_m >500 & points$min_dist_m <2000, ]
+# Keep only points with distance > 2000 of any polygon
+points_away_2km <- points[points$min_dist_m > 2000, ]
+# Keep all points within 500 m of any polygon
+points_500m <- points[points$min_dist_m > 0 & points$min_dist_m <500, ]
+
+
+### keep only Greece and land points within 500 meters
+### remove 24 points
+
+points_gr <- points[points$min_dist_m <500, ]
+
+## save points outside
+points_outside_cols <- points |>
+    filter(min_dist_m >0) |>
+    dplyr::select(species, datasetName,basisOfRecord,geometry,min_dist_m) |>
+    arrange(species)
+
+write_delim(points_outside_cols,
+            "../results/species_occurrences_outside_gr_land.tsv",
+            delim="\t")
 # plot
 
 points_gr_plot <- ggplot() +
     geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
     geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
-    geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_outside, aes(color = "Points away"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_inside_or_touching, aes(color = "Points inside"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_500m, aes(color = "Points away < 500m"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_2000m, aes(color = "Points away 500m<2000m"), shape = 1, show.legend = TRUE) +
     geom_sf(data = points_away_2km, aes(color = "Points away > 2km"),size=0.5,  show.legend = TRUE) +
     scale_color_manual(
       name = "Feature Type",
       values = c(
         "Gr borders" = "blue",
-        "Points" = "black",
+        "Points inside" = "black",
         "Points away > 2km" = "yellow",
-        "Points away" = "red"
+        "Points away 500m<2000m" = "blue",
+        "Points away < 500m" = "red"
       )
     ) +
     theme_bw()
 
 ggsave(plot=points_gr_plot,
-       "../figures/map_occurrences_borders_filtering.png", width = 8, height = 7, dpi = 300)
+       "../figures/map_occurrences_borders_filtering.png",
+           height = 25, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
 
-## only the far away
-points_gr_away_plot <- ggplot() +
-    geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
-    geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
-    geom_sf(data = points, aes(color = "Points"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_away_2km, aes(color = species),size=0.5,  show.legend = TRUE) +
-  #  scale_color_manual(
-  #    name = "Feature Type",
-  #    values = c(
-  #      "Gr borders" = "blue",
-  #      "Points" = "black",
-  #      "Points away > 2km" = "yellow",
-  #      "Points away" = "red"
-  #    )
-  #  ) +
-    theme_bw()
-
-ggsave(plot=points_gr_away_plot,
-       "../figures/map_occurrences_borders_filtering_away.png", width = 8, height = 7, dpi = 300)
-### keep only Greece and land points#
-### remove 48 points
-
-points_gr <- points_inside_or_touching
 
 
 ##################### 2. Species specific filtering #########################
@@ -386,6 +404,7 @@ points_final[] <- lapply(points_final, function(x) {
 # Then write
 st_write(points_final, "../results/species_samples_art17.gpkg", layer = "species_samples_art17", delete_layer = TRUE)
 
+#points_final <- st_read("../results/species_samples_art17.gpkg")
 ############## species metrics, population, population_n2k, distribution, range###############
 # summary of resourses
 #
@@ -437,6 +456,7 @@ datasets_colors <- c(
                      "NECCA_redlist"="#B31319",
                      "E1X_MDPP_2014_2024"="#FDF79C",
                      "E1X_DB"="#2BA09F",
+                     "db_refs_additional_2025"="green1",
                      "E1X_DB_references"="#141D43",
                      "Invertebrates_records_Olga"="#F85C29"
                      )
@@ -805,6 +825,9 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
 
 species_range = list()
 polygons_no_points_all <- list()
+colors_cell_origin <- c("range"="mediumvioletred",
+                        "distribution"="limegreen",
+                        "distribution orphan cell"="lightsalmon4")
 
 for (i in seq_along(species_with_data)){
     #i=1
@@ -824,6 +847,12 @@ for (i in seq_along(species_with_data)){
     polygons__points <- species_dist[points_index, ] 
     polygons_no_points_all[[i]]<- polygons_without_points
 
+    polygons_without_points_centroids <- st_centroid(polygons_without_points)
+
+    eea_polygons_without_points <- st_intersects(eea_10km_wgs,polygons_without_points_centroids)
+    eea_polygons_without_points_a <- eea_10km_wgs[lengths(eea_polygons_without_points) > 0,] |>
+        mutate(cell_origin="distribution orphan cell")
+
     dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
     locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
         distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
@@ -832,13 +861,17 @@ for (i in seq_along(species_with_data)){
     
     grids <- eea_10km_wgs |>
         filter(CELLCODE %in% locations_10_grid_samples$CELLCODE) |>
-        mutate(cell_origin="distribution")
+        mutate(cell_origin="distribution") |>
+        rbind(eea_polygons_without_points_a)
     
     expanded_range <- expand_range_with_gap_distance(distribution = grids,
                                                      full_grid = eea_10km_wgs,
                                                      gap_distance_m = 40000)
 
     species_range[[species_with_data[i]]] <- expanded_range
+
+
+    cell_origin_colors_f <- colors_cell_origin[unique(expanded_range$cell_origin)]
 
     # Maps
     species_gr_map <- ggplot()+
@@ -873,7 +906,7 @@ for (i in seq_along(species_with_data)){
                 colour="transparent",
                 na.rm = F) +
         scale_fill_manual(
-                          values= c("mediumvioletred", "limegreen"),
+                          values=cell_origin_colors_f ,
                           guide = guide_legend(
                                                 override.aes = list(
                                                                     linetype="solid",
@@ -944,7 +977,7 @@ orphan_cells_gr_map <- ggplot()+
             na.rm = F) +
     guides(
            fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
-    ggtitle(paste(species_with_data[i]))+
+    ggtitle(paste("Cells in distribution without points"))+
     theme_bw()+
     theme(axis.title=element_blank(),
           axis.text=element_text(colour="black"),
@@ -973,7 +1006,7 @@ st_write(species_range_combined, "../results/species_range_combined.gpkg",
 
 ############################## Hilda analysis ##############################
 
-results_ext_3 <- extract_from_named_rasters(hilda_rast_list,species_samples_art17)
+results_ext_3 <- extract_from_named_rasters(hilda_rast_list,points_final)
 
 
 for (i in 1:length(hilda_files)){
