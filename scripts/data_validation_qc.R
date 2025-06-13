@@ -14,13 +14,27 @@ library(tidyverse)
 library(readxl)
 library(units)
 library(ggnewscale)
+source("necca_spatial_functions.R")
 
 ###
+#points_final <- st_read("../results/species_samples_art17.gpkg")
+
 wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
 
 greece_regions_ETRS89 <- st_transform(greece_regions,3035)
+
+eea_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp")
+eea_1km_ETRS89 <- st_transform(eea_1km, 3035)
+
+eea_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp")
+eea_10km_ETRS89 <- st_transform(eea_10km, 3035)
+
+## do the st_union because greece_regions_ETRS89 is a multipolygon!!
+eea_10km_ETRS89_gr <- st_intersection(eea_10km_ETRS89, st_union(greece_regions_ETRS89)) |>
+    distinct(CELLCODE,geometry) |> 
+    mutate(area=units::set_units(st_area(geometry),"km^2"))
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
@@ -30,36 +44,213 @@ N2000_v32_ETRS89 <- st_transform(N2000_v32, 3035)
 ######### Anadohos ExtendedTemplate_Reporting dataSpecies_total ##################
 #### 2025-06-02
 #### load files
-ranges <- sf::st_read("../anadoxos_deliverables/Maps/Range_FINAL_LANDgadm.shp")
-population <- sf::st_read("../anadoxos_deliverables/Maps/Population1X1_FINAL_LANDgadm.shp")
-distribution <- sf::st_read("../anadoxos_deliverables/Maps/Distribution_FINAL_LANDgadm.shp")
 
+points <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+
+ranges <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/Species_range_invertebrates.shp") |>
+        mutate(file="range")
+distribution <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/Species_distribution_invertebrates.shp") |>
+    mutate(file="distribution")
+
+population <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/National_gr1km_Pops.shp")
+
+population_n2k <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/N2K_gr1km_Pops.shp")
+
+######### points quality control
+
+points <- points |>
+    mutate(occurrence_id=row_number())
+points_no_points <- points[which(is.na(points$datasetNam)),] 
+
+length(points_no_points)
+
+
+## points unique
+points_u <- points |> 
+#    st_drop_geometry() |>
+    count(Species, decimalLat,decimalLon, geometry)
+
+## these are of Parnassius apollo
+unique(points_no_points$Species)
+
+
+## my population
+##
+my_population <- st_join(points_u,
+                             eea_1km_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+
+my_population_unique <- my_population |> 
+    distinct(Species,CELLCODE)
+
+my_population_summary <- my_population_unique |>
+    group_by(Species) |>
+    summarize(my_n_eea_1km=n())
+
+
+## my distribution
+my_distribution <- st_join(points_u,
+                             eea_10km_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+my_distribution_unique <- my_distribution |>
+    distinct(Species,CELLCODE) |>
+    left_join(eea_10km_ETRS89_gr, by=c("CELLCODE"="CELLCODE"))
+
+my_distribution_whole_grid <- my_distribution |>
+    distinct(Species,CELLCODE) |>
+    left_join(eea_10km_ETRS89, by=c("CELLCODE"="CELLCODE")) |> 
+    sf::st_as_sf()
+
+my_distribution_summary <- my_distribution_unique |>
+    group_by(Species) |>
+    summarize(n_eea_10km=n(), my_total_area=sum(area))
+
+##### range with custom function
+
+my_species_range = list()
+species_names <- unique(my_distribution_summary$Species)
+source("necca_spatial_functions.R")
+for (i in seq_along(species_names)) {
+    dist <- my_distribution_whole_grid |>
+        filter(Species==species_names[i])
+    
+    grids <- eea_10km_ETRS89 |>
+        filter(CELLCODE %in% dist$CELLCODE) |>
+        mutate(cell_origin="distribution") 
+
+    my_species_range[[i]] <- expand_range_with_gap_distance(distribution = grids,
+                                           full_grid = eea_10km_ETRS89,
+                                           gap_distance_m = 40000, cellcode_col = "CELLCODE") |>
+    mutate(Species=species_names[i])
+
+
+}
+
+my_species_range_all <- bind_rows(my_species_range)
+
+## points over natura
+points_n2k_joined <- st_join(points_u,
+                             N2000_v32_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+points_n2k <- st_intersects(points_n2k_joined, N2000_v32_ETRS89)
+# do it at once with mutate
+points_distinct_n2k <- points_n2k_joined |> 
+    mutate(n2k = lengths(points_n2k) > 0)
+
+points_distinct_n2k_only <- points_distinct_n2k |>
+    filter(n2k==TRUE)
+
+# my population over natura
+my_population_n2k <- st_join(points_distinct_n2k_only,
+                             eea_1km_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+
+my_population_n2k_summary <- my_population_n2k |>
+    st_drop_geometry() |> 
+    distinct(Species,CELLCODE) |>
+    group_by(Species) |>
+    summarise(my_population_n2k=n(), .groups="keep")
+
+################ all my calculations ################
+summary_list <- list(my_distribution_summary, my_population_n2k_summary,my_population_summary)
+
+my_summaries <- reduce(summary_list, ~ left_join(.x, .y, by = "Species"))
+
+write_delim(my_summaries, "../anadoxos_deliverables/R_summaries.tsv",delim="\t")
 #### summary
 #### distribution
 distribution_summary <- distribution |>
     mutate(area=units::set_units(st_area(geometry),"km^2")) |>
     st_drop_geometry() |>
-    group_by(species) |>
-    summarise(total_area=round(drop_units(sum(area)),digits=2))
+    group_by(SPECIES) |>
+    summarise(n_eea_10km_cells=n(),
+              total_dist_area=round(drop_units(sum(area)),digits=2))
+
+distribution_unique <- distribution |>
+    distinct(SPECIES,CELLCODE) |>
+    group_by(SPECIES) |>
+    summarise(unique_cells=n())
+
+distribution_summary <- distribution_summary |>
+    left_join(distribution_unique)
 
 write_delim(distribution_summary, "../anadoxos_deliverables/validation_distribution.tsv",delim="\t")
+
+print("check the distribution unique cells")
+sum(distribution_summary$n_cells) == sum(distribution_summary$unique_cells)
+
+print("check the distribution cells with the number of features")
+sum(distribution_summary$n_cells)==nrow(distribution)
 
 #### range summary
 range_summary <- ranges |>
     mutate(area=units::set_units(st_area(geometry),"km^2")) |>
     st_drop_geometry() |>
-    group_by(Species) |>
-    summarise(total_area=round(drop_units(sum(area)),digits=2))
+    group_by(SPECIES) |>
+    summarise(total_range_area=round(drop_units(sum(area)),digits=2))
 
 write_delim(range_summary, "../anadoxos_deliverables/validation_range.tsv",delim="\t")
+
 #### check distinct cells
+#### in range the cells of distribution must be present
 range_dist_summary <- ranges |>
-    distinct(Species,CELLCODE,geometry) |>
+    distinct(SPECIES,CELLCODE,geometry) |>
     mutate(area=units::set_units(st_area(geometry),"km^2")) |>
     st_drop_geometry() |>
-    group_by(Species) |>
-    summarise(n_cells=n(),
-              total_area=round(drop_units(sum(area)),digits=2))
+    group_by(SPECIES) |>
+    summarise(n_range_cells=n(),
+              total_range_area=round(drop_units(sum(area)),digits=2))
+
+range_dist_check <- ranges |>
+    distinct(SPECIES,CELLCODE) |>
+    group_by(SPECIES) |>
+    summarise(unique_cells=n())
+
+range_dist_summary <- range_dist_summary |>
+    left_join(range_dist_check)
+
+print("check the distribution unique cells")
+sum(range_dist_summary$n_range_cells) == sum(range_dist_summary$unique_cells)
+
+print("check the distribution cells with the number of features")
+sum(range_dist_summary$n_range_cells)==nrow(ranges)
+
+## check cells in range and dist
+## join the files and calculate the number of files
+## of each species AND CELLCODE
+## the rows with 1 file should be the extra cells of 
+## range.
+## the rows with 2 files must be the rows of distribution
+distribution_range_check <- rbind(distribution,ranges) |>
+    dplyr::distinct(CELLCODE,SPECIES,file) |>
+    group_by(CELLCODE,SPECIES) |>
+    summarise(files=n_distinct(file),
+              file_name=paste(file, collapse = ", "),
+              .groups = "drop")
+
+
+print("check that the distribution cells are in range")
+
+distribution_range_joined <- distribution_range_check |>
+    filter(files>1)
+print("Are all cells that are in both files the same size as in distribution file?")
+nrow(distribution_range_joined) == nrow(distribution)
+
+print("Are all cells of combind in range file?")
+sum(range_dist_summary$n_cells)==nrow(distribution_range_check)
+
 
 #sf_use_s2(TRUE)
 #### population, calculate 
@@ -68,14 +259,18 @@ population_summary <- population |>
     mutate(area=units::set_units(st_area(geometry),"km^2")) |>
     mutate(area_tr=units::set_units(st_area(st_transform(geometry,4326)),"km^2")) |>
     st_drop_geometry() |>
-    group_by(species) |>
+    group_by(Species) |>
     summarise(
-              total_area=round(drop_units(sum(area)),digits=2),
-              total_area_tr=round(drop_units(sum(area_tr)),digits=2))
+              total_1km_area=round(drop_units(sum(area)),digits=2),
+              total_1km_area_tr=round(drop_units(sum(area_tr)),digits=2)) |>
+    rename("SPECIES"="Species")
+
 
 #### population check distinct population 
 population_distinct <- population |>
-    distinct(species,CELLCODE_1,geometry)
+    distinct(Species,CELLCODE_1,geometry)
+print("check the population unique cells")
+nrow(population) == nrow(population_distinct)
 
 st_write(population_distinct,
          "../anadoxos_deliverables/population_distinct.gpkg",
@@ -84,64 +279,44 @@ st_write(population_distinct,
 #### there are duplicate cells 
 
 population_distinct_area <- population |>
-    distinct(species,CELLCODE_1,geometry) |>
+    distinct(Species,CELLCODE_1,geometry) |>
     mutate(area=units::set_units(st_area(geometry),"km^2")) |>
     mutate(area_tr=units::set_units(st_area(st_transform(geometry,4326)),"km^2")) |>
     st_drop_geometry() |>
-    group_by(species) |>
+    group_by(Species) |>
     summarise(
-              n_cells=n(),
-              total_area=round(drop_units(sum(area)),digits=2),
-              total_area_tr=round(drop_units(sum(area_tr)),digits=2))
+              n_eea_1km_cells=n(),
+              total_1km_u_area=round(drop_units(sum(area)),digits=2),
+              total_1km_u_area_tr=round(drop_units(sum(area_tr)),digits=2)) |>
+    left_join(population_summary, by=c("Species"="SPECIES"))
 
 write_delim(population_distinct_area, "../anadoxos_deliverables/validation_population.tsv",delim="\t")
 
 #### population over N2K
 
-population_n2k_area <- population |>
-    distinct(species,CELLCODE_1,geometry)
-
-# find the cells that overlap with N2K
-intersection <- st_intersects(population_distinct, N2000_v32_ETRS89)
-# find the elements with intersection
-intersection_index <- lengths(intersection) > 0 
-# find the elements NO with intersection
-no_intersection_index <- lengths(intersection) == 0 
-# keep only the intersected elements
-intersection_shp <- population_distinct[intersection_index, ] 
-# remove the intersected elements
-no_intersection_shp <- population_distinct[no_intersection_index, ] 
-
-# do it at once with mutate
-population_distinct_n2k <- population_distinct |> 
-    mutate(n2k = lengths(intersection) > 0)
-
-population_distinct_n2k_only <- population_distinct_n2k |>
-    filter(n2k==TRUE)
-
-st_write(population_distinct_n2k_only,
-         "../anadoxos_deliverables/population_distinct_n2k.gpkg",
-         layer = "n2k",
-         delete_layer = TRUE)
-
-nrow(intersection_shp) + nrow(no_intersection_shp)==nrow(population_distinct)
+population_n2k_distinct <- population_n2k |>
+    distinct(Species, CELLCODE_1)
 
 
-population_distinct_n2k_area <- population_distinct_n2k |>
-    filter(n2k==TRUE) |>
-    distinct(species,CELLCODE_1,geometry) |>
-    mutate(area=units::set_units(st_area(geometry),"km^2")) |>
-    mutate(area_tr=units::set_units(st_area(st_transform(geometry,4326)),"km^2")) |>
-    st_drop_geometry() |>
-    group_by(species) |>
-    summarise(
-              n_cells=n(),
-              total_area=round(drop_units(sum(area)),digits=2),
-              total_area_tr=round(drop_units(sum(area_tr)),digits=2))
+print("check the population n2k unique cells")
+nrow(population_n2k) == nrow(population_n2k_distinct)
 
-write_delim(population_distinct_n2k_area, "../anadoxos_deliverables/population_distinct_n2k_area.tsv",delim="\t")
+population_n2k_summary <- population_n2k |>
+    distinct(Species, CELLCODE_1) |>
+    group_by(Species) |>
+    summarise(population_n2k=n()) |>
+    rename("SPECIES"="Species")
 
-### validate with map
+
+######################### Check my calculation with Deliverables ################
+deliverable_summary_list <- list(range_summary, distribution_summary, population_n2k_summary,population_summary)
+
+deliverable_summaries <- reduce(deliverable_summary_list, ~ left_join(.x, .y, by = "SPECIES"))
+
+write_delim(deliverable_summaries, "../anadoxos_deliverables/deliverable_summaries_with_R.tsv",delim="\t")
+
+
+######################################################### validate with map
 
 
 natura_colors <- c(
