@@ -36,8 +36,6 @@ N2000_v32_wgs <- st_transform(N2000_v32,4326)
 
 ########################### Load Species Data ###########################
 ### Species occurrences enriched ######
-species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
-species_occurrences_spatial <- read_delim("../results/species_occurrences_spatial.tsv",delim="\t")
 species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
 
 species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
@@ -49,7 +47,6 @@ sspecies_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_
 species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
 
 
-
 ########################## Flowchart for FRVs ##########################
 # keep only one species name from the synonyms
 species_info <- species_samples_art17 |>
@@ -57,9 +54,9 @@ species_info <- species_samples_art17 |>
     left_join(species_taxonomy, by=c("submittedName"="verbatim_name")) |>
     left_join(iucn_art17_invert_no_tax, by=c("submittedName"="submittedName"))
 # species spatial 
-species_art17_spatial <- species_occurrences_spatial |>
-    filter(submittedName %in% species_taxonomy$verbatim_name) |> # remove mostly NA's and species not in list
+species_art17_spatial <- species_samples_art17 |>
     left_join(species_info) |>
+    filter(!is.na(decimalLongitude)) |> 
     st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
              remove=F,
              crs="WGS84")
@@ -69,12 +66,11 @@ species_art17_spatial <- species_occurrences_spatial |>
 parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp") |>
     st_transform(crs="WGS84")
 
-species_samples_art17_parnasious <- species_art17_spatial |>
+p_apollo_points <- species_art17_spatial |>
     filter(species=="Parnassius apollo") |>
-    filter(X_eudem_dem_4258_europe>600)
+    mutate(A_VEG_TYPE_vegetation_map = as.factor(A_VEG_TYPE_vegetation_map))
 
-apollo_mean <- species_samples_art17_parnasious |>
-    dplyr::select(-starts_with("X_hilda_plu")) |>
+apollo_mean <- p_apollo_points |>
     summarise(
     across(
            where(is.numeric),
@@ -82,11 +78,10 @@ apollo_mean <- species_samples_art17_parnasious |>
            )
     )
 
-
 write_delim(apollo_mean,"../results/apollo_mean.tsv", delim="\t")
 
 ### hotspot
-locations_10_grid_samples <- st_join(gr_10km, species_samples_art17_parnasious, left=F) |>
+locations_10_grid_samples <- st_join(gr_10km, p_apollo_points, left=F) |>
     distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
     group_by(geometry,CELLCODE) |>
     summarise(n_samples=n(),.groups="keep")
@@ -128,7 +123,7 @@ hotspot_apollo_map <- ggplot()+
             colour="transparent",
             na.rm = F,
             show.legend=T) +
-    geom_sf(species_samples_art17_parnasious, mapping=aes(color=datasetName),size=1,alpha=0.6) +
+    geom_sf(p_apollo_points, mapping=aes(color=datasetName),size=1,alpha=0.6) +
     scale_fill_gradient(low="gray50",
                         high="gray5",
                         guide = "colourbar")+
@@ -159,26 +154,7 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
        device="png")
 
 ############## Modeling FRV ##################
-## based on https://rspatial.org/sdm/index.html 
-## sampling bias
-##
-### # create a SpatRaster with the extent of acgeo
-#r <- rast(acv)
-## set the resolution of the cells to (for example) 1 degree
-#res(r) <- 1
-## extend (expand) the extent of the SpatRaster a little
-#r <- extend(r, ext(r)+1)
-## sample:
-#set.seed(13)
-#acsel <- spatSample(acv, size=1, "random", strata=r)
-## to illustrate the method and show the result
-#p <- as.polygons(r)
-#plot(p, border='gray')
-#points(acv)
-## selected points in red
-#points(acsel, cex=1, col='red', pch='x')
-
-apollo <- species_samples_art17_parnasious |>
+apollo <- p_apollo_points |>
     st_drop_geometry() |>
     dplyr::select(decimalLatitude,decimalLongitude)
 
@@ -189,7 +165,7 @@ apollo_points <- vect(apollo, geom = c("decimalLongitude", "decimalLatitude"), c
 
 ## colinearity of raster data
 library(corrr)
-species_samples_art17_parnasious_num <- species_samples_art17_parnasious |>
+species_samples_art17_parnasious_num <- p_apollo_points |>
     st_drop_geometry() |>
     dplyr::select(where(is.numeric)) |>
     correlate()
@@ -233,6 +209,16 @@ bio12_rast_r <- resample(bio12_rast_c,gr_1km_rast)
 bio15_rast_r <- resample(bio15_rast_c,gr_1km_rast)
 veg_rast_r <- resample(veg_rast_c,gr_1km_rast)
 
+
+# Combine them into a single stack
+env_stack <- c(dem_rast_r,slope_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)
+names(env_stack) <- c("eudem_dem_4258_europe","eudem_slop_3035_europe","wc2.1_30s_bio_12", "wc2.1_30s_bio_15", "A_VEG_TYPE")
+# Convert to data frame with x/y coords
+env_df <- as.data.frame(env_stack, xy = TRUE, na.rm = FALSE)
+
+# Convert habitat to factor (and match model)
+env_df$A_VEG_TYPE <- factor(env_df$A_VEG_TYPE,
+                         levels = levels(unique(p_apollo_points$A_VEG_TYPE_vegetation_map)))  # must match GLM
 # Step 3: Rasterize the polygon (using a specific field to assign values)
 
 ## resample with the gr_1km 
@@ -245,7 +231,6 @@ plot(plot_rasters, nr = 2, nc = 3)
 dev.off()
 
 ## extract values
-
 presvals <- extract(predictors, apollo_points)
 # remove the ID variable
 presvals <- presvals[,-1]
@@ -253,7 +238,7 @@ presvals <- presvals[,-1]
 # random set of points for this example
 set.seed(0)
 backgr <- spatSample(predictors, 1000, "random", as.points=TRUE, na.rm=TRUE)
-backgr$A_VEG_TYPE <- as.character(backgr$A_VEG_TYPE)
+backgr$A_VEG_TYPE <- as.factor(backgr$A_VEG_TYPE)
 absvals <- values(backgr)
 pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
 sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
@@ -264,38 +249,38 @@ pairs(sdmdata[,3:7], cex=0.8)
 dev.off()
 
 ## Model fitting
-m1 <- glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15 + A_VEG_TYPE, data=sdmdata)
+m1 <- glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15 + A_VEG_TYPE, data=sdmdata, family = binomial)
 class(m1)
 summary(m1)
 
-m2 = glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15, data=sdmdata)
-m2
+#m2 = glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15, data=sdmdata)
+#m2
 
 ## predicts
-##
 library(predicts)
-presvals_clean <- presvals[complete.cases(presvals[,c("eudem_dem_4258_europe", "wc2.1_30s_bio_12", "wc2.1_30s_bio_15", "A_VEG_TYPE")]), ]
+env_df$predicted_prob <- predict(m1, newdata = env_df, type = "response")
 
-bc <- envelope(presvals_clean[,c("eudem_dem_4258_europe", "wc2.1_30s_bio_12", "wc2.1_30s_bio_15", "A_VEG_TYPE")])
-bc
-
-pr <- partialResponse(bc, presvals_clean, "wc2.1_30s_bio_12")
-p <- predict(predictors, m1)
+# Create a new raster layer for prediction
+pred_rast <- rast(env_stack[[1]])  # use template raster
+values(pred_rast) <- env_df$predicted_prob
 
 library(RColorBrewer)
 colors <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
 png("../figures/sdm_predict_apollo.png", width = 2000, height = 1500, units="px")
-plot(p,col = colors)
+plot(pred_rast, main = "Predicted Probability of Presence")
 points(apollo_points)
 dev.off()
 
 ### fRP
-filtered_raster <- p > 0.6
-plot(filtered_raster)
+filtered_raster <- p > 0.5
 masked_raster <- mask(p, filtered_raster)
 cell_area <- res(p)[1] * res(p)[2]
 area <- sum(!is.na(masked_raster[])) * cell_area
 
+png("../figures/sdm_predict_apollo_0_6.png", width = 2000, height = 1500, units="px")
+plot(filtered_raster,col = colors)
+points(apollo_points)
+dev.off()
 
 ## Model evaluation
 
