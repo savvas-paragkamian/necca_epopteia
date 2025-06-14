@@ -30,14 +30,18 @@ eea_1km_ETRS89 <- st_transform(eea_1km, 3035)
 
 eea_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp")
 eea_10km_ETRS89 <- st_transform(eea_10km, 3035)
+eea_10km_wgs <- st_transform(eea_10km,4326)
 
 ## do the st_union because greece_regions_ETRS89 is a multipolygon!!
 eea_10km_ETRS89_gr <- st_intersection(eea_10km_ETRS89, st_union(greece_regions_ETRS89)) |>
     distinct(CELLCODE,geometry) |> 
     mutate(area=units::set_units(st_area(geometry),"km^2"))
 
+eea_10km_ETRS89_gr_area <- st_drop_geometry(eea_10km_ETRS89_gr)
+
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
+N2000_v32_wgs <- st_transform(N2000_v32,4326)
 N2000_v32_ETRS89 <- st_transform(N2000_v32, 3035)
 
 ########################### Validation - QC ###########################
@@ -134,7 +138,14 @@ for (i in seq_along(species_names)) {
 
 my_species_range_all <- bind_rows(my_species_range)
 
-## points over natura
+my_species_range_summary <- my_species_range_all |>
+    st_drop_geometry() |> 
+    distinct(Species,CELLCODE) |>
+    left_join(eea_10km_ETRS89_gr_area) #|>
+    group_by(Species) |>
+    summarise(my_eea10km_range=n(), my_range_area=sum(area,na.rm = TRUE))
+
+########## points over natura
 points_n2k_joined <- st_join(points_u,
                              N2000_v32_ETRS89,
                              join = st_intersects,
@@ -367,6 +378,272 @@ ggsave("../figures/map_validation_population_natura.png",
            units="cm",
            device="png")
 
+########################### Validation - QC Protogeni epopteia 2025 ##################
+
+######## Deigmata 
+deigmata_data <- read_xlsx("../anadoxos_deliverables/FINALInvertebratesΠΒΔV6_6.6.2025.xlsx",
+                           sheet="Δείγματα Ασπόνδυλων",
+                           col_names=T
+                           ) |> slice(-1)
+
+deigmata_data_qc <- deigmata_data |> 
+    mutate(latitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
+           longitude=as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)) 
+
+########### qc missing coordinates
+
+deigmata_data_qc_missing <- deigmata_data_qc |>
+    filter(is.na(latitude) | is.na(longitude))
+
+
+deigmata_data_sf <- deigmata_data_qc |>
+    filter(!is.na(longitude)) |> 
+    st_as_sf(
+             coords=c("longitude","latitude"),
+             remove=F,
+             crs="WGS84")
+
+st_write(deigmata_data_sf,
+         "../anadoxos_deliverables/anadoxos_samples/deigmata_data.gpkg",
+         layer = "deigmata_data_sf",
+         delete_layer = TRUE)
+
+st_write(deigmata_data_sf,"../anadoxos_deliverables/anadoxos_samples/deigmata_data_sf.shp")
+
+######## Eidi
+
+eidi_data <- read_xlsx("../anadoxos_deliverables/FINALInvertebratesΠΒΔV6_6.6.2025.xlsx",
+                       sheet="Είδη",
+                       col_names=T
+                           ) |> slice(-1)
+
+deigmata_eidi <- eidi_data |>
+    mutate(species=if_else(`Όνομα είδους`=="Άλλο",
+                           `Άλλο είδος`,
+                           `Όνομα είδους`)) |>
+    mutate(art17_92_43_EEC=if_else(`Όνομα είδους`!="Άλλο",
+                                   TRUE,
+                                   FALSE)) |>
+    left_join(deigmata_data_qc, by=c("Sam_ID"="Sam_ID"))
+
+#### export to gpkg
+deigmata_eidi_sf <- deigmata_eidi |>
+    filter(!is.na(longitude)) |> 
+    st_as_sf(
+             coords=c("longitude","latitude"),
+             remove=F,
+             crs="WGS84")
+
+st_write(deigmata_eidi_sf,
+         "../anadoxos_deliverables/anadoxos_samples/deigmata_eidi.gpkg",
+         layer = "deigmata_eidi_sf",
+         delete_layer = TRUE)
+
+##### species from the list
+deigmata_eidi_art17 <- deigmata_eidi |>
+    distinct(Obs_ID,Sam_ID, species, art17_92_43_EEC) |>
+    filter(art17_92_43_EEC==TRUE)
+
+sort(unique(deigmata_eidi_art17$species))
+
+deigmata_eidi_art17_summary <- deigmata_eidi_art17 |>
+    group_by(species,Sam_ID) |>
+    summarise(n_obs=n(),.groups="keep")
+    
+print("number of samples that have species from art 17")
+length(unique(deigmata_eidi_art17_summary$Sam_ID))
+
+print("number of observations that have species from art 17")
+sum(deigmata_eidi_art17_summary$n_obs)
+
+deigmata_eidi_obs <- deigmata_eidi |>
+    group_by(species,Sam_ID) |>
+    summarise(n_obs=n(),.groups="keep")
+
+deigmata_eidi_obs_s <- deigmata_eidi_obs |>
+    group_by(species) |>
+    summarise(n_obs=sum(n_obs),n_samples=n())
+
+
+# which samples don't have occurrences
+samples_no_species <- deigmata_data_qc |> 
+    filter(!(Sam_ID %in% unique(deigmata_eidi$Sam_ID)))
+
+samples_with_species <- deigmata_data_qc |> 
+    mutate(sample_with_species = Sam_ID %in% unique(deigmata_eidi$Sam_ID)) |>
+    mutate(samples_with_art17 = Sam_ID %in% unique(deigmata_eidi_art17_summary$Sam_ID)) |>
+    mutate(species_category = if_else(sample_with_species==FALSE,"without species",
+                                      if_else(samples_with_art17==TRUE,
+                                              "species from list",
+                                              "other species")))
+
+print("summary of samples with species")
+table(samples_with_species$sample_with_species)
+print("summary of samples with species from list")
+table(samples_with_species$samples_with_art17)
+print("summary of samples category based on species")
+table(samples_with_species$species_category)
+
+
+################### eea 10km grid overlap ################
+
+points_eea_joined <- st_join(deigmata_data_sf_ETRS89,
+                             eea_10km_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+points_eea_joined_distinct <- points_eea_joined |>
+    distinct(Sam_ID, CELLCODE) |>
+    left_join(eea_10km_wgs) |>
+    sf::st_as_sf()
+
+print("number of eea 10 sp km grids")
+length(unique(points_eea_joined_distinct$CELLCODE))
+
+#### map
+
+epopteia_2025_samples_with_species_map <- ggplot() +
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(points_eea_joined_distinct, mapping=aes(alpha=0.8),color="lightseagreen" ) +
+    geom_point(samples_with_species,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color=species_category),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    coord_sf(crs="WGS84") +
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position = "bottom",
+          legend.box.background = element_blank())
+
+ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_samples_with_species_map.png", 
+       plot=epopteia_2025_samples_with_species_map, 
+       height = 20, 
+       width = 20,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
+
+################### greece overlap ################
+dist_matrix <- st_distance(deigmata_data_sf, greece_regions)
+deigmata_data_sf$min_dist_m <- apply(dist_matrix, 1, min)
+
+# points inside
+points_inside_or_touching <- deigmata_data_sf[deigmata_data_sf$min_dist_m ==0, ]
+
+points_outside <- deigmata_data_sf[deigmata_data_sf$min_dist_m >0,]
+
+epopteia_2025_species_gr_map <- ggplot() +
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_point(deigmata_data_sf,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color=`Χρηματοδοτικό Μέσο`),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    geom_point(points_outside,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color="outside"),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    coord_sf(crs="WGS84") +
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position = "bottom",
+          legend.box.background = element_blank())
+
+ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map.png", 
+       plot=epopteia_2025_species_gr_map, 
+       height = 40, 
+       width = 40,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
+################### n2k overlap ################
+deigmata_data_sf_ETRS89 <- st_transform(deigmata_data_sf,3035)
+
+points_n2k_joined <- st_join(deigmata_data_sf_ETRS89,
+                             N2000_v32_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+points_n2k <- st_intersects(points_n2k_joined, N2000_v32_ETRS89)
+
+# do it at once with mutate
+points_distinct_n2k <- points_n2k_joined |> 
+    mutate(n2k = lengths(points_n2k) > 0) |>
+    distinct(Sam_ID,n2k,longitude,latitude) |>
+    left_join(samples_with_species)
+
+print("species category per samples and appearrance in NATURA2000")
+table(points_distinct_n2k$n2k,points_distinct_n2k$species_category)
+
+
+natura_colors <- c(
+                   "SCI"="#E69F00",
+                   "SPA"="#56B4E9",
+                   "SCISPA"="#CC79A7"
+)
+
+
+## natura2000
+g_base_n2000 <- ggplot()+
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+            alpha=0.3,
+            #colour="transparent",
+            na.rm = F,
+            show.legend=T) +
+    scale_fill_manual(
+                      values= natura_colors,
+                       guide = guide_legend(
+                                            override.aes = list(
+                                                                linetype="solid",
+                                                                shape = NA)
+                                            ),
+                       name="Natura2000"
+                       )+
+    theme_bw()
+### natura2000 with all points
+g_art17_n2000 <- g_base_n2000 +
+    geom_point(points_distinct_n2k,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color=n2k),
+            size=1.2,
+            alpha=0.8,
+            show.legend=T) +
+#    scale_color_manual(values=datasets_colors,
+#                        name = "Datasets")+
+    guides(
+           fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)),
+           color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
+    theme(legend.position.inside = c(0.87, 0.75)
+    )
+
+
+ggsave("../anadoxos_deliverables/anadoxos_samples/samples_invertebrates_natura.png", 
+           plot=g_art17_n2000, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+
 ########################### Validation - QC proigoumeni epopteia ##################
 
 deigmata_data <- read_xlsx("../data/Invertebrates_v1.5_ALL.xlsx",
@@ -383,8 +660,6 @@ eidi_data <- read_xlsx("../data/Invertebrates_v1.5_ALL.xlsx",
                        sheet="Είδη",
                        col_names=T
                            ) |> slice(-1)
-
-
 
 ## missing coordinates
 deigmata_data_no_coords <- deigmata_data |> 
