@@ -1,6 +1,6 @@
 library(sf)
 library(dplyr)
-library(magnityr)
+library(magrittr)
 library(terra)
 
 #### extract info from polygons to add as metadata to points
