@@ -44,6 +44,14 @@ N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_
 N2000_v32_wgs <- st_transform(N2000_v32,4326)
 N2000_v32_ETRS89 <- st_transform(N2000_v32, 3035)
 
+## elevation
+### EU DEM Greece
+eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
+
+### EU DEM Greece slope
+eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
+
+
 ########################### Validation - QC ###########################
 ######### Anadohos ExtendedTemplate_Reporting dataSpecies_total ##################
 #### 2025-06-02
@@ -327,6 +335,8 @@ deliverable_summaries <- reduce(deliverable_summary_list, ~ left_join(.x, .y, by
 write_delim(deliverable_summaries, "../anadoxos_deliverables/deliverable_summaries_with_R.tsv",delim="\t")
 
 
+
+
 ######################################################### validate with map
 
 
@@ -378,15 +388,34 @@ ggsave("../figures/map_validation_population_natura.png",
            units="cm",
            device="png")
 
+########################### Validation - QC 2.6 Habitats ##################
+
+habitats_2_6 <- sf::st_read("../anadoxos_deliverables/Habitats/Habitats_v1.shp")
+habitats_prefs <- read_excel("../anadoxos_deliverables/Habitats/Habitat_Prefs.xls")
+
+points <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+
+points_sf <- st_transform(points, crs(eu_dem_gr))
+
+points_dem <- terra::extract(eu_dem_gr, vect(points_sf))
+
+points_with_vals <- cbind(points_sf, points_dem[,-1]) 
+
+points_dem_sum <- points_with_vals |>
+    group_by(Species) |>
+    summarise(dem_mean=mean(points_dem....1.,na.rm=T)) |>
+    left_join(habitats_prefs, by=c("Species"="SPECIES"))
+
 ########################### Validation - QC Protogeni epopteia 2025 ##################
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/FINALInvertebratesΠΒΔV6_6.6.2025.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ V6_19.6.2025.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
 
 deigmata_data_qc <- deigmata_data |> 
+    filter(!is.na(Sam_ID)) |>
     mutate(latitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
            longitude=as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)) 
 
@@ -408,11 +437,10 @@ st_write(deigmata_data_sf,
          layer = "deigmata_data_sf",
          delete_layer = TRUE)
 
-st_write(deigmata_data_sf,"../anadoxos_deliverables/anadoxos_samples/deigmata_data_sf.shp")
 
 ######## Eidi
 
-eidi_data <- read_xlsx("../anadoxos_deliverables/FINALInvertebratesΠΒΔV6_6.6.2025.xlsx",
+eidi_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ V6_19.6.2025.xlsx",
                        sheet="Είδη",
                        col_names=T
                            ) |> slice(-1)
@@ -539,6 +567,9 @@ points_inside_or_touching <- deigmata_data_sf[deigmata_data_sf$min_dist_m ==0, ]
 
 points_outside <- deigmata_data_sf[deigmata_data_sf$min_dist_m >0,]
 
+print("Samples with coordinates in the sea or out of hellenic border")
+deigmata_data_sf |> filter(min_dist_m>0) |> dplyr::select(Sam_ID) 
+
 epopteia_2025_species_gr_map <- ggplot() +
     geom_sf(greece_regions, mapping=aes()) +
     geom_point(deigmata_data_sf,
@@ -565,8 +596,8 @@ epopteia_2025_species_gr_map <- ggplot() +
 
 ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map.png", 
        plot=epopteia_2025_species_gr_map, 
-       height = 40, 
-       width = 40,
+       height = 20, 
+       width = 20,
        dpi = 300, 
        units="cm",
        device="png")
