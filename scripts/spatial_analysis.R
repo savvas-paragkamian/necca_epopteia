@@ -226,7 +226,7 @@ points$min_dist_m <- apply(dist_matrix, 1, min)
 points_inside_or_touching <- points[points$min_dist_m ==0, ]
 
 # Keep only points within 500, 2000 m of any polygon
-points_2000m <- points[points$min_dist_m >500 & points$min_dist_m <2000, ]
+points_away_500m <- points[points$min_dist_m >500, ]
 # Keep only points with distance > 2000 of any polygon
 points_away_2km <- points[points$min_dist_m > 2000, ]
 # Keep all points within 500 m of any polygon
@@ -254,23 +254,23 @@ points_gr_plot <- ggplot() +
     geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
     geom_sf(data = points_inside_or_touching, aes(color = "Points inside"), shape = 1, show.legend = TRUE) +
     geom_sf(data = points_500m, aes(color = "Points away < 500m"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_2000m, aes(color = "Points away 500m<2000m"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_away_2km, aes(color = "Points away > 2km"),size=0.5,  show.legend = TRUE) +
+    geom_sf(data = points_away_500m, aes(color = "Points away > 500m"), shape = 1, show.legend = TRUE) +
     scale_color_manual(
       name = "Feature Type",
       values = c(
         "Gr borders" = "blue",
         "Points inside" = "black",
-        "Points away > 2km" = "yellow",
-        "Points away 500m<2000m" = "blue",
+        "Points away > 500m" = "blue",
         "Points away < 500m" = "red"
       )
     ) +
-    theme_bw()
+    theme_bw()+
+    theme(legend.position="inside",
+          legend.position.inside = c(0.87, 0.75))
 
 ggsave(plot=points_gr_plot,
        "../figures/map_occurrences_borders_filtering.png",
-           height = 25, 
+           height = 20, 
            width = 25,
            dpi = 300, 
            units="cm",
@@ -310,29 +310,33 @@ points_gr_s_z_h <- points_gr_s_z |>
 points_final <- points_gr_s_z_h
 ################################ FINAL DATASET EXPORT ############################
 
-species_samples_art17 <- points_final |>
+species_samples_art17_olga <- points_final |>
     st_drop_geometry()
+
+species_samples_art17 <- points_final |>
+    filter(datasetName!="Invertebrates_records_Olga") 
 
 write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
 
 #### save
-species_samples_art17_open <- species_samples_art17 |>
-    filter(datasetName!="Invertebrates_records_Olga")
+species_samples_art17_private <- points_final
 
-write_delim(species_samples_art17_open,"../results/species_samples_art17_open.tsv", delim="\t")
+write_delim(species_samples_art17_private,"../results/species_samples_art17_private.tsv", delim="\t")
 
 # Ensure character columns are in UTF-8
-points_final[] <- lapply(points_final, function(x) {
+species_samples_art17[] <- lapply(species_samples_art17, function(x) {
                              if (is.character(x)) Encoding(x) <- "UTF-8"
                              return(x)
 })
 
 # Then write
-st_write(points_final, "../results/species_samples_art17.gpkg", layer = "species_samples_art17", delete_layer = TRUE)
+st_write(species_samples_art17, "../results/species_samples_art17.gpkg", layer = "species_samples_art17", delete_layer = TRUE)
 
 #points_final <- st_read("../results/species_samples_art17.gpkg")
 ############## species metrics, population, population_n2k, distribution, range###############
 # summary of resourses
+
+##### MAKE SUMMARY ONLY WITH OPEN DATA #######
 #
 resources_summary_art17 <- species_samples_art17 |>
     group_by(datasetName,species) |>
@@ -340,6 +344,7 @@ resources_summary_art17 <- species_samples_art17 |>
     group_by(datasetName) |>
     summarise(n_occurrences=sum(n_occurrences), n_species=n())
 
+write_delim(resources_summary_art17, "../results/resources_summary_art17.tsv",delim="\t")
 # what is known for each species
 
 species_info <- species_samples_art17 |>
@@ -375,7 +380,7 @@ write_delim(species_summary, "../results/species_summary.tsv", delim="\t")
 ################################## MAPS ########################################
 ################################################################################
 
-species_with_data <- unique(points_final$species)
+species_with_data <- unique(species_samples_art17$species)
 
 datasets_colors <- c(
                      "GBIF"="seagreen",
@@ -393,7 +398,6 @@ natura_colors <- c(
                    "SPA"="#56B4E9",
                    "SCISPA"="#CC79A7"
 )
-
 
 ## natura2000
 g_base_n2000 <- ggplot()+
@@ -424,7 +428,7 @@ ggsave("../figures/map_natura.png",
 
 ### natura2000 with all points
 g_art17_n2000 <- g_base_n2000 +
-    geom_point(points_final,
+    geom_point(species_samples_art17,
             mapping=aes(x=decimalLongitude,
                         y=decimalLatitude,
                         color=datasetName),
@@ -454,7 +458,7 @@ ggsave("../figures/map_art17_invertebrates_natura.png",
 ### figures of each invertebrate of art17 for Greece
 
 for (i in seq_along(species_with_data)){
-    species_occurrences <- points_final |>
+    species_occurrences <- species_samples_art17 |>
         filter(species==species_with_data[i])
 
     dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
@@ -501,7 +505,7 @@ for (i in seq_along(species_with_data)){
 for (i in seq_along(species_with_data)){
     # use the 1X1 as a proxy of population
 
-    species_occurrences <- points_final |>
+    species_occurrences <- species_samples_art17 |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
     
@@ -584,7 +588,7 @@ for (i in seq_along(species_with_data)){
 for (i in seq_along(species_with_data)){
     # use the 10X10 as a proxy of distribution
 
-    species_occurrences <- points_final |>
+    species_occurrences <- species_samples_art17 |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
 
@@ -696,7 +700,7 @@ colors_cell_origin <- c("range"="mediumvioletred",
 
 for (i in seq_along(species_with_data)){
     #i=1
-    species_occurrences <- points_final |>
+    species_occurrences <- species_samples_art17 |>
         filter(species==species_with_data[i]) |>
         filter(datasetName!="GBIF")
     
