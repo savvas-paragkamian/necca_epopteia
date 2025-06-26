@@ -149,7 +149,7 @@ my_species_range_all <- bind_rows(my_species_range)
 my_species_range_summary <- my_species_range_all |>
     st_drop_geometry() |> 
     distinct(Species,CELLCODE) |>
-    left_join(eea_10km_ETRS89_gr_area) #|>
+    left_join(eea_10km_ETRS89_gr_area) |>
     group_by(Species) |>
     summarise(my_eea10km_range=n(), my_range_area=sum(area,na.rm = TRUE))
 
@@ -326,7 +326,6 @@ population_n2k_summary <- population_n2k |>
     summarise(population_n2k=n()) |>
     rename("SPECIES"="Species")
 
-
 ######################### Check my calculation with Deliverables ################
 deliverable_summary_list <- list(range_summary, distribution_summary, population_n2k_summary,population_summary)
 
@@ -390,8 +389,8 @@ ggsave("../figures/map_validation_population_natura.png",
 
 ########################### Validation - QC 2.6 Habitats ##################
 
-habitats_2_6 <- sf::st_read("../anadoxos_deliverables/Habitats/Habitats_v1.shp")
-habitats_prefs <- read_excel("../anadoxos_deliverables/Habitats/Habitat_Prefs.xls")
+habitats_2_6 <- sf::st_read("../anadoxos_deliverables/2_6/Παράρτημα ΙΙ.shp")
+habitats_prefs <- read_excel("../anadoxos_deliverables/2_6/Παράρτημα Ι.xls")
 
 points <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
 
@@ -405,6 +404,9 @@ points_dem_sum <- points_with_vals |>
     group_by(Species) |>
     summarise(dem_mean=mean(points_dem....1.,na.rm=T)) |>
     left_join(habitats_prefs, by=c("Species"="SPECIES"))
+
+
+
 
 ########################### Validation - QC Protogeni epopteia 2025 ##################
 
