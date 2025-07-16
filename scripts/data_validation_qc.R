@@ -389,8 +389,8 @@ ggsave("../figures/map_validation_population_natura.png",
 
 ########################### Validation - QC 2.6 Habitats ##################
 
-habitats_2_6 <- sf::st_read("../anadoxos_deliverables/2_6/Παράρτημα ΙΙ.shp")
-habitats_prefs <- read_excel("../anadoxos_deliverables/2_6/Παράρτημα Ι.xls")
+habitats_2_6 <- sf::st_read("../anadoxos_deliverables/2.6. Αποτύπωση των ενδιαιτημάτων/Species_habitats_invertebrates/Species_habitats_invertebrates.shp")
+habitats_prefs <- read_excel("../anadoxos_deliverables/2.6. Αποτύπωση των ενδιαιτημάτων/Παράρτημα Ι.xls")
 
 points <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
 
@@ -411,7 +411,7 @@ points_dem_sum <- points_with_vals |>
 ########################### Validation - QC Protogeni epopteia 2025 ##################
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ V6_19.6.2025.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ_V6.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
@@ -442,10 +442,10 @@ st_write(deigmata_data_sf,
 
 ######## Eidi
 
-eidi_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ V6_19.6.2025.xlsx",
+eidi_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ_V6.xlsx",
                        sheet="Είδη",
                        col_names=T
-                           ) |> slice(-1)
+                           ) |> slice(-1) |> filter(!is.na(Obs_ID))
 
 deigmata_eidi <- eidi_data |>
     mutate(species=if_else(`Όνομα είδους`=="Άλλο",
@@ -517,6 +517,7 @@ table(samples_with_species$species_category)
 
 ################### eea 10km grid overlap ################
 
+deigmata_data_sf_ETRS89 <- st_transform(deigmata_data_sf,3035)
 points_eea_joined <- st_join(deigmata_data_sf_ETRS89,
                              eea_10km_ETRS89,
                              join = st_intersects,
@@ -570,7 +571,7 @@ points_inside_or_touching <- deigmata_data_sf[deigmata_data_sf$min_dist_m ==0, ]
 points_outside <- deigmata_data_sf[deigmata_data_sf$min_dist_m >0,]
 
 print("Samples with coordinates in the sea or out of hellenic border")
-deigmata_data_sf |> filter(min_dist_m>0) |> dplyr::select(Sam_ID) 
+deigmata_data_sf |> filter(min_dist_m>0) |> dplyr::select(Sam_ID, min_dist_m) 
 
 epopteia_2025_species_gr_map <- ggplot() +
     geom_sf(greece_regions, mapping=aes()) +
@@ -605,7 +606,6 @@ ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map.p
        device="png")
 
 ################### n2k overlap ################
-deigmata_data_sf_ETRS89 <- st_transform(deigmata_data_sf,3035)
 
 points_n2k_joined <- st_join(deigmata_data_sf_ETRS89,
                              N2000_v32_ETRS89,
