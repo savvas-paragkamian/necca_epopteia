@@ -89,7 +89,7 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
 
     # 1. Calculate centroid distances
     centroids <- st_centroid(grids)
-    dist_matrix <- st_distance(centroids)
+    dist_matrix <- st_distance(centroids, which="Euclidean")
     dist_num <- drop_units(dist_matrix)
     
     # 2. Name rows/columns of matrix by CELLCODE
