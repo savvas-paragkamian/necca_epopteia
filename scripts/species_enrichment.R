@@ -166,6 +166,33 @@ Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_202
     mutate(datasetName = "Invertebrates_records_Olga") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
+
+###### Unio crassus complex ###### 
+### Integrative phylogenetic, phylogeographic and morphological characterisation of the Unio crassus species complex reveals cryptic diversity with important conservation implications
+### https://doi.org/10.1016/j.ympev.2024.108046
+
+
+unio_crassus_complex <- read_xlsx("../data/unio_crassus_complex_supplementary.xlsx",
+                                    col_names=T) 
+
+unio_crassus_complex_gr <- unio_crassus_complex |>
+    rename("decimalLongitude"="LONGITUDE",
+           "decimalLatitude"="LATITUDE",
+           "submittedName"="SPECIES") |>
+    mutate(
+           submittedName=gsub("U.", "Unio",submittedName),
+           datasetName="Lopes-Lima et al., 2024",
+           basisOfRecord="MATERIAL_SAMPLE") |>
+    mutate(individualCount=NA) |>
+    filter(COUNTRY=="Greece") |>
+    dplyr::distinct(datasetName,
+                    basisOfRecord,
+                    submittedName,
+                    individualCount,
+                    decimalLatitude,
+                    decimalLongitude) 
+
+
 ########################### NECCA Redlist ###########################
 
 necca_redlist_points <- st_read("../data/necca_redlist/points_invertebrates.gpkg")
@@ -264,6 +291,7 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
                                     E1X_DB_select,
                                     E1X_DB_ref_all,
                                     necca_redlist_points_df,
+                                    unio_crassus_complex_gr,
                                     stenobothrus_eurasius,
                                     Invertebrates_records_Olga) |>
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
