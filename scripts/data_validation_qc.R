@@ -44,6 +44,9 @@ N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_
 N2000_v32_wgs <- st_transform(N2000_v32,4326)
 N2000_v32_ETRS89 <- st_transform(N2000_v32, 3035)
 
+N2000_v32_ETRS89_sci <- N2000_v32_ETRS89 |>
+    filter(SITETYPE!="SPA")
+
 ## elevation
 ### EU DEM Greece
 eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
@@ -57,16 +60,17 @@ eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europ
 #### 2025-06-02
 #### load files
 
-points <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+points <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
 
-ranges <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/Species_range_invertebrates.shp") |>
+ranges <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/Species_range_invertebrates.shp") |>
         mutate(file="range")
-distribution <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/Species_distribution_invertebrates.shp") |>
+
+distribution <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/Species_distribution_invertebrates.shp") |>
     mutate(file="distribution")
 
-population <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/National_gr1km_Pops.shp")
+population <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/National_gr1km_Pops.shp")
 
-population_n2k <- sf::st_read("../anadoxos_deliverables/Distribution&RangeMaps_20250611/N2K_gr1km_Pops.shp")
+population_n2k <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/N2K_gr1km_Pops.shp")
 
 ######### points quality control
 
@@ -102,6 +106,13 @@ my_population_summary <- my_population_unique |>
     group_by(Species) |>
     summarize(my_n_eea_1km=n())
 
+my_population_unio <- my_population |>
+    filter(grepl("Unio*.",Species)) |>
+    filter(Species!="Unio elongatulus") |>
+    mutate(Species_complex = "Unio crassus complex") |>
+    distinct(Species_complex,CELLCODE) |>
+    group_by(Species_complex) |>
+    summarize(my_n_eea_1km=n())
 
 ## my distribution
 my_distribution <- st_join(points_u,
@@ -140,10 +151,68 @@ for (i in seq_along(species_names)) {
                                            full_grid = eea_10km_ETRS89,
                                            gap_distance_m = 40000, cellcode_col = "CELLCODE") |>
     mutate(Species=species_names[i])
-
-
 }
 
+##### troubleshooting the range function! not the same as in range tool
+#
+#    distribution <- my_distribution_whole_grid |>
+#        filter(Species=="Apatura metis")
+#    grids <- distribution # species distribution
+#
+#    # 1. Calculate centroid distances
+#    centroids <- st_centroid(grids)
+#    dist_matrix <- st_distance(centroids, which="Euclidean")
+#    dist_num <- drop_units(dist_matrix)
+#    
+#    # 2. Name rows/columns of matrix by CELLCODE
+#    cellcode <- grids[["CELLCODE"]]
+#    rownames(dist_num) <- colnames(dist_num) <- cellcode
+#    
+#    # 3. Create adjacency matrix: keep only upper triangle and filter by gap
+#    upper_only <- dist_num
+#    upper_only[!upper.tri(upper_only)] <- 0
+#    adj_matrix <- upper_only
+#    adj_matrix[adj_matrix <= 0 | adj_matrix > 400000] <- 0
+#    diag(adj_matrix) <- 0
+#    
+#    # 4. Convert adjacency matrix to edgelist
+#    edge_list <- which(adj_matrix != 0, arr.ind = TRUE)
+#    edge_df <- data.frame(
+#        from = rownames(adj_matrix)[edge_list[, 1]],
+#        to   = colnames(adj_matrix)[edge_list[, 2]],
+#        weight = adj_matrix[edge_list]
+#    )
+#    
+#    # 5. Join centroid geometries for from/to
+#    centroids_df <- centroids %>% st_drop_geometry() %>% mutate(geometry = st_geometry(centroids))
+#    from_geom <- centroids[match(edge_df$from, cellcode), ]
+#    to_geom   <- centroids[match(edge_df$to, cellcode), ]
+#    
+#    # 6. Create lines between centroids
+#    line_list <- mapply(
+#      function(p1, p2) st_linestring(matrix(c(st_coordinates(p1), st_coordinates(p2)), ncol = 2, byrow = TRUE)),
+#      st_geometry(from_geom),
+#      st_geometry(to_geom),
+#      SIMPLIFY = FALSE
+#    )
+#    
+#    lines_sf <- st_sf(
+#        from = edge_df$from,
+#        to   = edge_df$to,
+#        geometry = st_sfc(line_list, crs = st_crs(grids))
+#    )
+#    
+#    # 7. Find cells in full grid intersecting these lines
+#    full_grid <- eea_10km_ETRS89
+#    intersecting_cells <- st_intersects(full_grid, lines_sf, sparse = FALSE)
+#    filled_cells <- full_grid[apply(intersecting_cells, 1, any), ] %>%
+#        mutate(cell_origin = "range")
+#    
+#    # 8. Return union of filled cells and original grids
+#    expanded_grid <- rbind(filled_cells, grids) %>% distinct()
+#    
+#
+#####
 my_species_range_all <- bind_rows(my_species_range)
 
 my_species_range_summary <- my_species_range_all |>
@@ -154,8 +223,14 @@ my_species_range_summary <- my_species_range_all |>
     summarise(my_eea10km_range=n(), my_range_area=sum(area,na.rm = TRUE))
 
 ########## points over natura
-points_n2k_joined <- st_join(points_u,
-                             N2000_v32_ETRS89,
+points_u_v <- points |> 
+    filter(Distributi=="Verified") |>
+#    st_drop_geometry() |>
+    count(Species, decimalLat,decimalLon, geometry)
+
+
+points_n2k_joined <- st_join(points_u_v,
+                             N2000_v32_ETRS89_sci,
                              join = st_intersects,
                              left = TRUE,
                              largest = FALSE)
@@ -176,12 +251,21 @@ my_population_n2k <- st_join(points_distinct_n2k_only,
                              largest = FALSE)
 
 
+
 my_population_n2k_summary <- my_population_n2k |>
     st_drop_geometry() |> 
+    filter(!is.na(SITETYPE)) |>
     distinct(Species,CELLCODE) |>
     group_by(Species) |>
     summarise(my_population_n2k=n(), .groups="keep")
 
+my_population_n2k_unio <- my_population_n2k |>
+    filter(grepl("Unio*.",Species)) |>
+    filter(Species!="Unio elongatulus") |>
+    mutate(Species_complex = "Unio crassus complex") |>
+    distinct(Species_complex,CELLCODE) |>
+    group_by(Species_complex) |>
+    summarize(my_n_eea_1km=n())
 ################ all my calculations ################
 summary_list <- list(my_distribution_summary, my_population_n2k_summary,my_population_summary)
 
