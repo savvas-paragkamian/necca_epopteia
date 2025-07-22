@@ -83,6 +83,10 @@ species_names_combined <- c(
   "Unio crassus",
   "Unio elongatulus",
   "Unio pictorum",
+  "Unio bruguierianus",
+  "Unio desectus",
+  "Unio ionicus",
+  "Unio vicarius",
   "Vertigo angustior",
   "Vertigo moulinsiana",
   "Zerynthia polyxena"
@@ -158,8 +162,19 @@ pred("hasGeospatialIssue", FALSE),
 format = "SIMPLE_CSV"
 )
 
-# to check the status of the download
-# This is for the species of annex II 
+# download on 16/7/2025
+occ_download_wait('0024201-250711103210423')
+#  Status: SUCCEEDED
+#  DOI: 10.15468/dl.dyfhdg
+#  Format: SIMPLE_CSV
+#  Download key: 0024201-250711103210423
+#  Created: 2025-07-16T14:58:35.297+00:00
+#  Modified: 2025-07-16T15:00:38.467+00:00
+#  Download link: https://api.gbif.org/v1/occurrence/download/request/0024201-250711103210423.zip
+#  Total records: 2498
+
+
+
 # download on 30/5/2025
 #occ_download_wait('0008134-250525065834625')
 # DOI: 10.15468/dl.d2v94q 
@@ -168,7 +183,7 @@ format = "SIMPLE_CSV"
 # Another key for the gbif download of 268 invertegrate species 
 # is 0018673-241107131044228 
 
-#gbif_species_occ <- occ_download_get('0008134-250525065834625') |>
+#gbif_species_occ <- occ_download_get('0024201-250711103210423') |>
 #    occ_download_import()
 
 #write_delim(gbif_species_occ, "../data/gbif_invertebrate_species_occ.tsv", delim="\t")
@@ -176,7 +191,7 @@ format = "SIMPLE_CSV"
 gbif_species_occ <- read_delim("../data/gbif_invertebrate_species_occ.tsv", delim="\t")
 
 # check which is na in species. 
-gbif_species_occ|> filter(is.na(species))
+gbif_species_occ |> filter(is.na(species))
 
 # 
 gbif_species_occ$species <- ifelse(!is.na(gbif_species_occ$verbatimScientificName) &
