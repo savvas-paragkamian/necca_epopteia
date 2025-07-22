@@ -389,6 +389,7 @@ datasets_colors <- c(
                      "E1X_DB"="#2BA09F",
                      "db_refs_additional_2025"="green1",
                      "E1X_DB_references"="#141D43",
+                     "Lopes-Lima et al., 2024"="#E69F00",
                      "Invertebrates_records_Olga"="#F85C29"
                      )
 
