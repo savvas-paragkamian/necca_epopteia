@@ -3,6 +3,9 @@
 ## Script name: data_validation_qc.R
 ##
 ## Purpose of script:
+## In this script we perform validation and quality control
+## of the deliverables of the project. At the species level 
+## the population (number of 1X1 eea cells), distribution and n2k dist.
 ##
 ## Author: Savvas Paragkamian
 ##
@@ -17,7 +20,7 @@ library(ggnewscale)
 source("necca_spatial_functions.R")
 
 ###
-#points_final <- st_read("../results/species_samples_art17.gpkg")
+species_samples_art17 <- st_read("../results/species_samples_art17_all.tsv")
 
 wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
@@ -57,7 +60,7 @@ eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europ
 
 ########################### Validation - QC ###########################
 ######### Anadohos ExtendedTemplate_Reporting dataSpecies_total ##################
-#### 2025-06-02
+#### latest check 2025-07-25
 #### load files
 
 points <- sf::st_read("../anadoxos_deliverables/Maps/Valid species/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")

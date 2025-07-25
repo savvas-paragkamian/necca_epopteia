@@ -3,6 +3,9 @@
 ## Script name: data_retrieval_preparation.R
 ##
 ## Author: Savvas Paragkamian
+## Purpose of script:
+## preparation of different types of data, spatial, species occurrences,
+## taxonomy. The script is interactive, i.e not to executed all at once.
 ##
 ## Date Created: 2024-11-06
 
@@ -15,6 +18,7 @@ library(rgbif)
 library(units)
 library(vegan)
 library(rnaturalearth)
+source("necca_spatial_functions.R")
 
 
 ###
@@ -272,46 +276,6 @@ ggsave("../figures/gbif_species_map.png",
 
 ################################## world Clim ####################################
 
-## function to crop tif rasters based on bbox of other shapefile
-## and make it wgs84 <- "EPSG:4326" 
-
-#raster_path <- eurodem_file
-#bbox_sf <- bbox_polygon
-#output_path <- eurodem_gr_d
-crop_raster_by_shp <- function(raster_path, shp, output_path) {
-    # Read the raster
-    raster_tmp <- rast(raster_path)
-    bbox_sf <- st_as_sf(st_as_sfc(st_bbox(shp)))
-    # Check CRS match
-    raster_crs <- crs(raster_tmp, proj=TRUE)
-    bbox_crs <- st_crs(bbox_sf)$wkt
-
-    if (raster_crs != bbox_crs) {
-        message("Reprojecting bbox to match raster CRS...")
-        bbox_sf <- st_transform(bbox_sf, crs = st_crs(raster_crs))
-    }
-    # Convert bbox to SpatVector for terra cropping
-    #bbox_vect <- vect(bbox_sf)
-    #Crop raster
-    cropped_raster <- crop(raster_tmp, bbox_sf)
-    # project to WGS84
-    wgs84 <- "EPSG:4326"
-    if (crs(cropped_raster) != wgs84) {
-        cropped_raster <- project(cropped_raster, wgs84)
-    }
-    mask_raster <- mask(cropped_raster, shp)
-
-    output_path <- paste0(output_path,"crop_",basename(raster_path),sep="")
-  
-    # Save the cropped raster
-    terra::writeRaster(mask_raster, output_path, overwrite = TRUE)
-  
-    # Clean up
-    rm(raster_tmp, cropped_raster, mask_raster)
-    gc()
-  
-    message("Saved cropped raster to: ", output_path)
-}
 
 ####### World clim #########
 world_clim_directory <- "/Users/talos/Documents/spatial_data/world_clim/wc2.1_30s_bio/"
@@ -360,6 +324,13 @@ for (f in hilda_directory_files) {
         next
     }
 }
+
+### corine land cover raster 100m
+corine_file <- "/Users/talos/Documents/spatial_data/u2018_clc2018_v2020_20u1_raster100m/DATA/U2018_CLC2018_V2020_20u1.tif"
+corine_gr_d <- "../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/"
+# crop
+crop_raster_by_shp(corine_file,greece_regions,corine_gr_d)
+
 #### EU DEM
 ###https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD
 # crop the eu dem file, it is 20gb.
