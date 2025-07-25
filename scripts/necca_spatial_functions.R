@@ -1,8 +1,58 @@
+## Script name: necca_spatial_functions.R
+##
+## Author: Savvas Paragkamian
+##
+## Purpose of script:
+## Different functions needed for the project across multiple 
+## scripts
+##
+## Date Created: 2024-04-30
+
 library(sf)
 library(dplyr)
 library(magrittr)
 library(terra)
 
+## function to crop tif rasters based on bbox of other shapefile
+## and make it wgs84 <- "EPSG:4326" 
+
+#raster_path <- eurodem_file
+#bbox_sf <- bbox_polygon
+#output_path <- eurodem_gr_d
+crop_raster_by_shp <- function(raster_path, shp, output_path) {
+    # Read the raster
+    raster_tmp <- rast(raster_path)
+    bbox_sf <- st_as_sf(st_as_sfc(st_bbox(shp)))
+    # Check CRS match
+    raster_crs <- crs(raster_tmp, proj=TRUE)
+    bbox_crs <- st_crs(bbox_sf)$wkt
+
+    if (raster_crs != bbox_crs) {
+        message("Reprojecting bbox to match raster CRS...")
+        bbox_sf <- st_transform(bbox_sf, crs = st_crs(raster_crs))
+    }
+    # Convert bbox to SpatVector for terra cropping
+    #bbox_vect <- vect(bbox_sf)
+    #Crop raster
+    cropped_raster <- crop(raster_tmp, bbox_sf)
+    # project to WGS84
+    wgs84 <- "EPSG:4326"
+    if (crs(cropped_raster) != wgs84) {
+        cropped_raster <- project(cropped_raster, wgs84)
+    }
+    mask_raster <- mask(cropped_raster, shp)
+
+    output_path <- paste0(output_path,"crop_",basename(raster_path),sep="")
+  
+    # Save the cropped raster
+    terra::writeRaster(mask_raster, output_path, overwrite = TRUE)
+  
+    # Clean up
+    rm(raster_tmp, cropped_raster, mask_raster)
+    gc()
+  
+    message("Saved cropped raster to: ", output_path)
+}
 #### extract info from polygons to add as metadata to points
 extract_polygon_info_multi <- function(points_sf, polygons_list, suffixes = NULL) {
     if (!inherits(points_sf, "sf")) stop("points_sf must be an sf object.")
