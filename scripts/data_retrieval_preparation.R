@@ -331,6 +331,8 @@ corine_gr_d <- "../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/"
 # crop
 crop_raster_by_shp(corine_file,greece_regions,corine_gr_d)
 
+corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
+
 #### EU DEM
 ###https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD
 # crop the eu dem file, it is 20gb.
