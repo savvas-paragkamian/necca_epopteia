@@ -38,7 +38,9 @@ edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, 
 ############################################################################################
 #################### Species Occurrences Data Homogenisation ###############################
 ############################################################################################
+#------------------------------------------------------------------------------#
 ##### Gbif data
+#------------------------------------------------------------------------------#
 ## data filter for coordinate precision
 print("gbif")
 ##
@@ -77,7 +79,9 @@ gbif_species_occ_gr <- gbif_species_occ_sf |>
 
 print("end gbif")
 
+#------------------------------------------------------------------------------#
 ######## NECCA compilation of previous Monitoring Data not included in ENVECO database
+#------------------------------------------------------------------------------#
 E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v7.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T) |> slice(-1) |> 
@@ -94,7 +98,7 @@ E1X_MDPP_2014_2024_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕ�
                            ) |> slice(-1)
 
 E1X_MDPP_2014_2024_all <- E1X_MDPP_2014_2024_species_data |>
-    mutate(species=if_else(`Όνομα είδους`=="Άλλο",
+    mutate(submittedName=if_else(`Όνομα είδους`=="Άλλο",
                            `Άλλο είδος`,
                            `Όνομα είδους`)) |>
     mutate(art17_92_43_EEC=if_else(`Όνομα είδους`!="Άλλο",
@@ -103,10 +107,11 @@ E1X_MDPP_2014_2024_all <- E1X_MDPP_2014_2024_species_data |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
     mutate(organismQuantity=as.numeric(`Κατηγορία Σχετικής αφθονίας είδους`)) |>
     filter(organismQuantity!=0 | is.na(organismQuantity) ) |> # remove 0 of category of population
-    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) |>
-    mutate(submittedName=`Όνομα είδους`)
-
+    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) 
+    #mutate(submittedName=`Όνομα είδους`)
+#------------------------------------------------------------------------------#
 ######### previous monitoring from ENVECO
+#------------------------------------------------------------------------------#
 ##### references
 E1X_DB_ref_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20250802.xlsx",
                                     sheet="Εξάπλωση ειδών και τ.ο.",
@@ -130,7 +135,6 @@ E1X_DB_ref_all <- E1X_DB_ref_samples_data |>
     mutate(individualCount=as.numeric(`Πλήθος ατόμων`)) 
 
 
-
 ##### samplings
 E1X_DB_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_ΑΣΠΟΝΔΥΛΑ_20241204.xlsx",
                                     sheet="Δείγματα Ασπόνδυλων",
@@ -146,8 +150,14 @@ E1X_DB_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_
 E1X_DB_all <- E1X_DB_species_data |> 
     filter(!is.na(Sam_ID)) |> 
     left_join(E1X_DB_samples_data, by=c("Sam_ID"="Sam_ID")) |>
+    mutate(submittedName=if_else(`Όνομα είδους`=="Άλλο",
+                           `Άλλο είδος`,
+                           `Όνομα είδους`)) |>
+    mutate(art17_92_43_EEC=if_else(`Όνομα είδους`!="Άλλο",
+                                   TRUE,
+                                   FALSE)) |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
-    mutate(submittedName=`Όνομα είδους`) |>
+    #mutate(submittedName=`Όνομα είδους`) |>
     mutate(datasetName = "E1X_DB") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
@@ -159,8 +169,15 @@ E1X_DB_all <- E1X_DB_species_data |>
 E1X_DB_select <- E1X_DB_all |>
     filter(individualCount>0)
 
-######################## other private data
+#------------------------------------------------------------------------------#
+######################## data from 2nd Reporting Period 2019-2015 
+#------------------------------------------------------------------------------#
+E2X_DB <- read_delim("../data/E2X_DB.tsv",delim="\t") |>
+    mutate(individualCount=NA)
 
+#------------------------------------------------------------------------------#
+######################## other private data
+#------------------------------------------------------------------------------#
 Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_20250427.csv", delim=",") |>
     mutate(decimalLongitude=Longitude,
            decimalLatitude=Latitude,
@@ -293,13 +310,13 @@ species_occurrences_invertebrates <- list(gbif_species_occ_gr,
                                     E1X_MDPP_2014_2024_all,
                                     E1X_DB_select,
                                     E1X_DB_ref_all,
+                                    E2X_DB,
                                     necca_redlist_points_df,
                                     unio_crassus_complex_gr,
                                     stenobothrus_eurasius,
                                     Invertebrates_records_Olga) |>
     map(~ dplyr::select(.x, all_of(columns_to_keep))) |>
     bind_rows() 
-
 
 write_delim(species_occurrences_invertebrates, "../results/species_occurrences_invertebrates.tsv",delim="\t")
 
