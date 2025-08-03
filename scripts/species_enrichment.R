@@ -78,7 +78,7 @@ gbif_species_occ_gr <- gbif_species_occ_sf |>
 print("end gbif")
 
 ######## NECCA compilation of previous Monitoring Data not included in ENVECO database
-E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024.xlsx",
+E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v7.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T) |> slice(-1) |> 
     mutate(decimalLatitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
@@ -88,7 +88,7 @@ E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕ�
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
 
-E1X_MDPP_2014_2024_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024.xlsx",
+E1X_MDPP_2014_2024_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v7.xlsx",
                            sheet="Είδη",
                            col_names=T
                            ) |> slice(-1)
@@ -101,16 +101,18 @@ E1X_MDPP_2014_2024_all <- E1X_MDPP_2014_2024_species_data |>
                                    TRUE,
                                    FALSE)) |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
+    mutate(organismQuantity=as.numeric(`Κατηγορία Σχετικής αφθονίας είδους`)) |>
+    filter(organismQuantity!=0 | is.na(organismQuantity) ) |> # remove 0 of category of population
     left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) |>
     mutate(submittedName=`Όνομα είδους`)
 
 ######### previous monitoring from ENVECO
 ##### references
-E1X_DB_ref_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20241204.xlsx",
+E1X_DB_ref_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20250802.xlsx",
                                     sheet="Εξάπλωση ειδών και τ.ο.",
                                     col_names=T) |> slice(-1) |> filter(!is.na(`Κωδικός Αναφοράς`))
 
-E1X_DB_refs_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20241204.xlsx",
+E1X_DB_refs_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20250802.xlsx",
                                     sheet="Βιβλιογραφία",
                                     col_names=T) |> slice(-1) |> filter(!is.na(`Κωδικός Αναφοράς`))
 
@@ -125,7 +127,8 @@ E1X_DB_ref_all <- E1X_DB_ref_samples_data |>
     mutate(datasetName="E1X_DB_references") |>
     mutate(basisOfRecord="MaterialCitation") |>
     mutate(submittedName=`Ονομασία είδους`) |>
-    mutate(individualCount=as.numeric(`Πλήθος ατόμων`))
+    mutate(individualCount=as.numeric(`Πλήθος ατόμων`)) 
+
 
 
 ##### samplings
