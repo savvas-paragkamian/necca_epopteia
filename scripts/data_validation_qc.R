@@ -19,8 +19,25 @@ library(units)
 library(ggnewscale)
 source("necca_spatial_functions.R")
 
+
+# ------------- Data from Parmakelis LB -----------#
+verified <- st_read("~/Downloads/maps/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+
+E2X_DB <- verified |> 
+    filter(datasetNam=="E2X_DB") |>
+    st_transform(4326) |>
+    st_drop_geometry() |>
+    rename(
+           "submittedName"="Species",
+           "basisOfRecord"="basisOfRec",
+           "decimalLatitude"="decimalLat",
+           "decimalLongitude"="decimalLon",
+           "datasetName"="datasetNam")
+
+write_delim(E2X_DB,"../data/E2X_DB.tsv",delim="\t")
+
 ###
-species_samples_art17 <- st_read("../results/species_samples_art17_all.tsv")
+species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
 
 wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
@@ -118,6 +135,38 @@ my_population_unio <- my_population |>
     summarize(my_n_eea_1km=n())
 
 ## my distribution
+grid_vertices <- st_geometry(eea_10km_ETRS89) |>
+  st_cast("POINT") |>     # extract corner points from polygons
+  st_union() |>           # merge all points into one geometry collection
+  st_cast("POINT") |>     # flatten again if necessary
+  st_as_sf() |>
+  distinct()
+
+corner_points <- st_equals_exact(points, grid_vertices, par=0.9)
+
+tolerance <- 500
+corner_matches <- st_is_within_distance(points, grid_vertices, dist = tolerance)
+points_at_corners <- points[lengths(corner_matches) > 0, ]
+
+# Option 2: Match with tolerance (e.g., 0.001 degree)
+tolerance <- 1e-8
+corner_matches <- st_is_within_distance(points, grid_vertices, dist = tolerance)
+points_at_corners <- points[lengths(corner_matches) > 0, ]
+
+## my distribution
+test_my_distribution <- st_join(points,
+                             eea_10km_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+test_my_distribution_u <- test_my_distribution |>
+    group_by(CELLCODE.y,Species,) |> 
+    summarise(n=n(), .groups="keep")
+
+test_ <- points |>
+    distinct(datasetNam,CELLCODE,decimalLat,decimalLon,Species)
+
 my_distribution <- st_join(points_u,
                              eea_10km_ETRS89,
                              join = st_intersects,
