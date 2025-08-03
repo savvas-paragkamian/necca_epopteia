@@ -371,22 +371,28 @@ myBiomodData <- BIOMOD_FormatingData(
 # -------------------------
 # 4. Run Single Models
 # -------------------------
+
+## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
 #myBiomodOptions <- bm_ModelingOptions("binary","default")
+
+my_models <- c("GLM", "RF", "ANN","MAXENT", "MARS")
+
 myBiomodOptions <- bm_ModelingOptions("binary",
-                                      models = c("GLM", "RF", "ANN"),
+                                      models = my_models,
                                       strategy="default",
                                       bm.format = myBiomodData)
 # Model single models
 myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
-                                    modeling.id = 'AllModels',
+                                    modeling.id = "P. apollo",
+                                    models = my_models,
                                     CV.strategy = 'random',
-                                    CV.nb.rep = 2,
+                                    CV.nb.rep = 10,
                                     CV.perc = 0.8,
                                     OPT.strategy = 'bigboss',
                                     var.import = 3,
+                                    nb.cpu = 8,
                                     metric.eval = c('TSS','ROC'))
                                     # seed.val = 123)
-                                    # nb.cpu = 8)
 myBiomodModelOut
 
 # Get evaluation scores & variables importance
