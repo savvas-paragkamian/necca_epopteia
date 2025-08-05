@@ -3,13 +3,17 @@
 ## Script name: spatial_analysis.R
 ##
 ## Purpose of script:
-## 1. Load all spatial data
+## 1. Load all data
 ## 2. Enrich occurrences with spatial info
-## 3. Filter and quality control based on custom filters
-## 4. Calculation and Maps 
+## 3. Quality control based on custom filters (e.g elevation) of species
+## 4. Compose a sample presence file file with all relavant information
+## 5. Assign filters in includeDistribution using
+##      a) data origin (datasetName)
+##      b) spatial info (distance from borders and elevation)
+##      c) species specific curation
+## 6. Calculations
 ##      a) species metrics, population, population_n2k, distribution, range
-##      b) Maps
-## 5. HILDA+ analysis
+## 7. Maps
 ##
 ## Author: Savvas Paragkamian
 ## 
@@ -37,6 +41,11 @@ greece_regions_ETRS89 <- st_transform(greece_regions, 3035)
 ### EEA reference grid
 eea_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp")
 eea_1km_wgs <- st_transform(eea_1km,4326)
+eea_1km_ETRS89 <- st_transform(eea_1km, 3035)
+
+eea_1km_ETRS89_min <- eea_1km_ETRS89 |>
+    dplyr::select(CELLCODE,geometry) |>
+    rename("CELLCODE_eea_1km"="CELLCODE")
 
 eea_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp")
 eea_10km_wgs <- st_transform(eea_10km,4326)
@@ -47,102 +56,46 @@ eea_10km_ETRS89_c_wgs <- st_transform(eea_10km_ETRS89_c,4326)
 ### eea 10km only land and in greece
 grids_in_greece <- st_intersection(eea_10km_ETRS89, greece_regions_ETRS89)
 
+# remove not used columns and calculate area
 grids_in_greece_min <- grids_in_greece |>
-    dplyr::select(CELLCODE,geometry)
-
-### EU DEM Greece
-eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
-
-### EU DEM Greece slope
-eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
-
-### World Clim , Bioclim Variables
-###
-world_clim_directory <- "../spatial_data/world_clim_greece/"
-world_clim_files <- list.files(world_clim_directory, pattern = "\\.tif$", full.names = TRUE)
-
-world_clim_list <- lapply(world_clim_files, rast)
+    dplyr::select(CELLCODE,geometry) |>
+    rename("CELLCODE_eea_10km"="CELLCODE") |>
+    mutate(area=units::set_units(st_area(geometry),"km^2")) |>
+    group_by(CELLCODE_eea_10km) |>
+    summarise(AreaKm2=sum(area))
 
 ### Natura2000
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
-N2000_v32_wgs <- st_transform(N2000_v32,4326)
-N2000_v32_wgs_sci <- N2000_v32_wgs |>
-    filter(SITETYPE=="SCI")
+#transform Natura2000
+N2000_v32_ETRS89 <- st_transform(N2000_v32, 3035) |>
+    dplyr::select(SITECODE,SITETYPE,geometry)
 
-N2000_v32_wgs_spa <- N2000_v32_wgs |>
-    filter(SITETYPE=="SPA")
+#wgs
+#N2000_v32_wgs <- st_transform(N2000_v32,4326)
+#N2000_v32_wgs_sci <- N2000_v32_wgs |>
+#    filter(SITETYPE=="SCI")
 
-N2000_v32_wgs_scispa <- N2000_v32_wgs |>
-    filter(SITETYPE=="SCISPA")
+#N2000_v32_wgs_spa <- N2000_v32_wgs |>
+#    filter(SITETYPE=="SPA")
 
+#N2000_v32_wgs_scispa <- N2000_v32_wgs |>
+#    filter(SITETYPE=="SCISPA")
 
-### Ecosystem Types of Europe 3.1 Terrestrial
-ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
-
-### Vegetation_map_Greece
-## the encoding ENCODING=WINDOWS-1253 helped to see the greek characters
-vegetation_map <- sf::st_read("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.shp",
-                              options = "ENCODING=WINDOWS-1253")
-
-vegetation_map_wgs <- st_transform(vegetation_map,4326) |>
-    st_make_valid()
-
-veg_data <- data.frame(
-  A_VEG_TYPE = c("ΕΛΑ", "ΕΡΛ", "ΠΜΑ", "ΠΛΔ", "ΠΔΑ", "ΠΧΑ", "ΠΚΟ", "ΠΘΑ", "ΚΠΡ",
-                 "ΑΡΚ", "ΟΞΥ", "ΔΡΥ", "ΚΑΣ", "ΣΗΜ", "ΣΦΕ", "ΦΙΛ", "ΦΠΛ", "ΠΑΡ",
-                 "ΕΥΚ", "ΦΟΙ", "ΘΑΜ", "ΦΘΑ", "ΛΙΒ", "ΑΓΟ", "ΟΙΚ", "ΓΚΑ", "ΓΚΕ",
-                 "ΛΧΡ", "ΛΙΜ"),
-  A_VEG_NAME = c("Ελάτη", "Ερυθρελάτη", "Πεύκη μαύρη", "Πεύκη λευκόδερμη", "Πεύκη δασική",
-                 "Πεύκη χαλέπιος", "Πεύκη κουκουναριά", "Πεύκη θαλασσία", "Κυπαρίσσι",
-                 "Άρκευθος", "Οξυά", "Δρύς", "Καστανιά", "Σημύδα", "Σφένδαμος",
-                 "Φιλύρα", "Φυλλοβόλα πλατύφυλλα", "Παραποτάμια βλάστηση", "Ευκάλυπτος",
-                 "Φοίνικας", "Θάμνοι", "Φυλλοβόλοι θάμνοι", "Λιβάδια, αραιά ξυλ. βλάστηση",
-                 "Άγονα", "Οικισμοί", "Γεωργ. καλλιέργειες", "Γεωργ. καλλιέργειες εγκατ.",
-                 "Λοιπές χρήσεις", "Λίμνη"),
-  stringsAsFactors = FALSE
-)
-
-### EUNIS_Habitats_2018 for the Natura2000 areas
-# the same as 01_Χαρτογράφηση χερσαίων Τ.Ο._EKXA
-
-EUNIS_Habitats <- sf::st_read("../spatial_data/EUNIS_Habitats_2018/Habitats_2018/Habitats.shp")
-
-EUNIS_Habitats_wgs <- st_transform(EUNIS_Habitats,4326) |>
-    st_make_valid()
-
-######### HILDA Greece land use change ##########
-hilda_cat <- data.frame(hilda_id = c("11","22","33","44","55","66","77"),
-                        hilda_name=c("urban","cropland","pasture/rangeland",
-                                     "forest", "unmanaged grass/shrubland","sparse/no vegetation", "water"),
-                        hilda_hex=c("#000000","#AE6120","#98BA6A","#07A07D","#BE81A3","#999999", "#1370A1"))
-hilda_cat_v <- c("urban"="#000000",
-                 "cropland"="#AE6120",
-                 "pasture/rangeland"="#98BA6A",
-                 "forest"="#07A07D",
-                 "unmanaged grass/shrubland"="#BE81A3",
-                 "sparse/no vegetation"="#999999",
-                 "water"="#1370A1")
-
-#### Hilda land cover change
-hilda_path <- "../spatial_data/hilda_greece/"
-hilda_id_names <- read_delim(paste0(hilda_path, "hilda_transitions_names.tsv", sep=""), delim="\t")
-hilda_all <- list.files(hilda_path)
-hilda_files <- hilda_all[grepl("*.tif", hilda_all)] 
-hilda_rast_list <- lapply(hilda_files, function(x) rast(paste0(hilda_path,x,sep="")))
-
+#
 #----------------------------------------------------------------------------#
-########################### Load Species Data ################################
+########################### Load Species Point Data ##########################
+########################### derived from species_enrichment.R ################
 #----------------------------------------------------------------------------#
-###
+### Taxonomy
 species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
 
 species_taxonomy_only <- species_taxonomy |>
     dplyr::select(species,verbatim_name)
 
-
 species_names_combined <- as.character(species_taxonomy$verbatim_name)
+
 ### Species occurrences integrated ###
 species_samples_art17_all <- read_delim("../results/species_samples_art17_all.tsv", delim="\t")
 # species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
@@ -150,24 +103,67 @@ species_samples_art17_all <- read_delim("../results/species_samples_art17_all.ts
 ## remove points without coordinates
 ### distinct all points
 
+species_samples_simple <- species_samples_art17_all |> 
+    filter(!is.na(decimalLatitude)) |>
+    distinct(submittedName,
+             decimalLatitude,
+             decimalLongitude,
+             datasetName,
+             basisOfRecord,
+             individualCount,
+             species) |>
+    #left_join(species_taxonomy_only, by=c("submittedName"="verbatim_name")) |>
+    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |>
+    mutate(species = gsub("Unio vicarius","Unio crassus",species)) |>
+    mutate(species = gsub("Unio ionicus","Unio crassus",species)) |>
+    mutate(species = gsub("Unio bruguierianus","Unio crassus",species)) |>
+    mutate(species = gsub("Unio desectus","Unio crassus",species)) |>
+    mutate(species = gsub("Polyommatus eros","Polyommatus eroides",species)) |>
+    mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) |>
+    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |> 
+    mutate(species = gsub("Osmoderma eremita","Osmoderma lassallei",species))
+
+# shapefile for visualisation
+points_sf <- species_samples_simple |> 
+    filter(!is.na(decimalLatitude)) |>
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
+             remove=F,
+             crs="WGS84")
+
+    # find the duplicates
 points_duplicates <- species_samples_art17_all |>
     filter(!is.na(decimalLatitude)) |>
     group_by(across(everything())) |>
     summarise(n = n(), .groups = "drop") |>
     filter(n>1)
 
-points_sf <- species_samples_art17_all |> 
-    filter(!is.na(decimalLatitude)) |>
-    distinct(across(everything())) |> 
-    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
-             remove=F,
-             crs="WGS84")
 ## sanity check
-
+print("is the number of rows the same with duplicates and removal of NAs in coordinates?")
 nrow(species_samples_art17_all |> filter(!is.na(decimalLatitude)) ) == nrow(points_sf) + sum(points_duplicates$n) - nrow(points_duplicates)
 
+# tranform to ETRS89
+points_sf_ETRS89 <- st_transform(points_sf, 3035)
+
+# add the cells 
+points_sf_cells <- st_join(points_sf_ETRS89,eea_10km_ETRS89)
+
 #----------------------------------------------------------------------------#
-#################### distribution data from previous report ##################
+## point samples is ready to use for the rest of the analysis
+species_samples <- points_sf_cells |>
+    st_drop_geometry() |>
+    rename("CELLCODE_eea_10km"="CELLCODE") |>
+    distinct(submittedName,
+             decimalLatitude,
+             decimalLongitude,
+             datasetName,
+             basisOfRecord,
+             individualCount,
+             CELLCODE_eea_10km,
+             species)
+
+#----------------------------------------------------------------------------#
+#################### Distribution data from previous report ##################
+######################### National report_2013_2018_shp ######################
 #----------------------------------------------------------------------------#
 ### this dataset contains multipolygons, one for each species.
 ### each polygon from this multipolygon is a grid from the EEA 10X10 reference
@@ -196,7 +192,6 @@ species_dist_national_E1 <- rbind(species_dist_national_rep,species_dist_nationa
     mutate(species = gsub("Unio desectus","Unio crassus",species)) |>
     mutate(species = gsub("Polyommatus eros","Polyommatus eroides",species)) |>
     mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) 
-
 
 ## add the Cellcode with st_within join to have only those that are
 ## from the same grids
@@ -251,198 +246,8 @@ species_dist_national_E1_eea_coords_wgs <- species_dist_national_E1_eea_coords_w
 
 st_write(species_dist_national_E1_eea_coords_wgs, "../results/species_dist_national_E1_eea_coords_wgs.gpkg", layer = "species_dist_national_E1_eea_coords_wgs", delete_layer = TRUE)
 
-## clean the names of the distribution
-## unique(species_dist_national_rep_wgsa$submittedName)[!(unique(species_dist_national_rep_wgsa$submittedName) %in% unique(points_sf$submittedName))]
-##
-
-
 #----------------------------------------------------------------------------#
-######################## Extract data to species occurrences ####################
-#----------------------------------------------------------------------------#
-### rasters stack
-
-rasters_list <- list(eu_dem_gr,eu_dem_slope,ecosystem_types_gr) # hilda_rast_list, add later ,world_clim_list
-
-
-results_ext <- extract_from_named_rasters(rasters_list,points_sf)
-results_ext_2 <- extract_from_named_rasters(world_clim_list,results_ext)
-
-
-### shapefiles
-
-
-####################### extract ####################### 
-result <- extract_polygon_info_multi(
-  results_ext_2,
-  polygons_list <- list(eea_1km_wgs,
-                      eea_10km_wgs,
-                      N2000_v32_wgs_sci,
-                      N2000_v32_wgs_spa,
-                      N2000_v32_wgs_scispa,
-                      vegetation_map_wgs,
-                      EUNIS_Habitats_wgs),
-  suffixes = c("eea_1km","eea_10km","N2000_v32_sci","N2000_v32_spa","N2000_v32_scispa","vegetation_map","EUNIS_Habitats")
-)
-
-species_occurrences_spatial <- result
-write_delim(species_occurrences_spatial,"../results/species_occurrences_spatial.tsv",delim="\t")
-
-#----------------------------------------------------------------------------#
-############################# Filtering and Quality ############################
-################################################################################
-#----------------------------------------------------------------------------#
-points <- species_occurrences_spatial
-
-## filter points based on polygon
-## return points that are intersecting with polygon
-
-### find the points that are on land and inside borders of greece
-
-polygons <- greece_regions
-#intersects_mat <- st_intersects(points, polygons, sparse = FALSE)
-# Use st_within to get logical vector of which points are inside the multipolygon
-#points_outside <- points[rowSums(intersects_mat) == 0, ]
-
-# check the distance
-# 1000 meters = 1 km
-#mat_2000 <- st_is_within_distance(points, polygons, dist = 2000, sparse = FALSE)
-#mat_500 <- st_is_within_distance(points, polygons, dist = 500, sparse = FALSE)
-
-
-# the distance from land and borders of Greece 
-# for the points that are outside, keep points within 500 meters.
-dist_matrix <- st_distance(points, polygons)
-points$min_dist_m <- apply(dist_matrix, 1, min)
-
-# points inside
-points_inside_or_touching <- points[points$min_dist_m ==0, ]
-
-# Keep only points within 500, 2000 m of any polygon
-points_away_500m <- points[points$min_dist_m >500, ]
-# Keep only points with distance > 2000 of any polygon
-points_away_2km <- points[points$min_dist_m > 2000, ]
-# Keep all points within 500 m of any polygon
-points_500m <- points[points$min_dist_m > 0 & points$min_dist_m <500, ]
-
-
-### keep only Greece and land points within 500 meters
-### remove 24 points
-
-points_gr <- points[points$min_dist_m <500, ]
-
-## save points outside
-points_outside_cols <- points |>
-    filter(min_dist_m >0) |>
-    dplyr::select(species, datasetName,basisOfRecord,geometry,min_dist_m) |>
-    arrange(species)
-
-write_delim(points_outside_cols,
-            "../results/species_occurrences_outside_gr_land.tsv",
-            delim="\t")
-# plot
-
-points_gr_plot <- ggplot() +
-    geom_sf(data = eea_10km_wgs, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
-    geom_sf(data = polygons, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
-    geom_sf(data = points_inside_or_touching, aes(color = "Points inside"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_500m, aes(color = "Points away < 500m"), shape = 1, show.legend = TRUE) +
-    geom_sf(data = points_away_500m, aes(color = "Points away > 500m"), shape = 1, show.legend = TRUE) +
-    scale_color_manual(
-      name = "Feature Type",
-      values = c(
-        "Gr borders" = "blue",
-        "Points inside" = "black",
-        "Points away > 500m" = "blue",
-        "Points away < 500m" = "red"
-      )
-    ) +
-    theme_bw()+
-    theme(legend.position="inside",
-          legend.position.inside = c(0.87, 0.75))
-
-ggsave(plot=points_gr_plot,
-       "../figures/map_occurrences_borders_filtering.png",
-           height = 20, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-
-#----------------------------------------------------------------------------#
-##################### 2. Species specific filtering #########################
-#----------------------------------------------------------------------------#
-
-points_gr_s <- points_gr
-### Parnassius apollo
-points_gr_s <- points_gr_s |>
-    filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 450))
-# this removes points of P. apollo that are below 450 altitude, from red list assessment.
-
-### Phengaris arion
-###
-###
-### Zerynthia polyxena
-### remove the occurrences from Crete, and south Aegean in general
-### because it is consindered as a different species
-
-points_gr_s_z <- points_gr_s |>
-    filter(!(species == "Zerynthia polyxena" & decimalLatitude < 36))
-
-### rename Hirudo medicinalis to Hirudo verbana
-points_gr_s_z_h <- points_gr_s_z |>
-    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |> 
-    #mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) |> 
-    mutate(species = gsub("Osmoderma eremita","Osmoderma lassallei",species))
-### eremita => lassallei
-### Paracossulus => Catopta
-
-### Unio pictorum
-
-points_final <- points_gr_s_z_h
-
-#----------------------------------------------------------------------------#
-################################ FINAL DATASET EXPORT ############################
-#----------------------------------------------------------------------------#
-
-species_samples_art17_olga <- points_final |>
-    st_drop_geometry()
-
-species_samples_art17 <- points_final |>
-    filter(datasetName!="Invertebrates_records_Olga") 
-
-write_delim(species_samples_art17,"../results/species_samples_art17.tsv", delim="\t")
-
-#### save
-species_samples_art17_private <- points_final
-
-write_delim(species_samples_art17_private,"../results/species_samples_art17_private.tsv", delim="\t")
-
-# Ensure character columns are in UTF-8
-species_samples_art17[] <- lapply(species_samples_art17, function(x) {
-                             if (is.character(x)) Encoding(x) <- "UTF-8"
-                             return(x)
-})
-
-# Then write
-st_write(species_samples_art17, "../results/species_samples_art17.gpkg", layer = "species_samples_art17", delete_layer = TRUE)
-
-#points_final <- st_read("../results/species_samples_art17.gpkg")
-
-#----------------------------------------------------------------------------#
-###### species metrics, population, population_n2k, distribution, range#######
-#----------------------------------------------------------------------------#
-# summary of resourses
-
-##### MAKE SUMMARY ONLY WITH OPEN DATA #######
-#
-resources_summary_art17 <- species_samples_art17 |>
-    group_by(datasetName,species) |>
-    summarise(n_occurrences=n(), .groups="keep") |>
-    group_by(datasetName) |>
-    summarise(n_occurrences=sum(n_occurrences), n_species=n())
-
-write_delim(resources_summary_art17, "../results/resources_summary_art17.tsv",delim="\t")
-
+########## Parnassius apollo distribution data Action Plan 2019 #############
 #----------------------------------------------------------------------------#
 
 # P apollo
@@ -486,34 +291,18 @@ p_apollo_dist_d <- p_apollo_eea_coords_wgs |>
     rename("CELLCODE_eea_10km"="CELLCODE") |>
     mutate(
            species="Parnassius apollo",
+           individualCount=NA,
            submittedName="Parnassius apollo"
            ) 
 
 #----------------------------------------------------------------------------#
-## Distribution use LAEA##
-## keep only the minimum information
+############################# Presence File Compilation #####################
+######### Merging previous files
 #----------------------------------------------------------------------------#
 
-species_samples_eea_minimum <- species_samples_art17 |>
-    st_drop_geometry() |>
-    distinct(
-             submittedName,
-             decimalLongitude,
-             decimalLatitude,
-             basisOfRecord,
-             datasetName,
-#             CELLCODE_eea_1km,
-             CELLCODE_eea_10km
-             ) |>
-    left_join(species_taxonomy_only, by=c("submittedName"="verbatim_name")) |>
-    mutate(species = gsub("Osmoderma eremita","Osmoderma lassallei",species)) |>
-    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |>
-    mutate(species = gsub("Unio vicarius","Unio crassus",species)) |>
-    mutate(species = gsub("Unio ionicus","Unio crassus",species)) |>
-    mutate(species = gsub("Unio bruguierianus","Unio crassus",species)) |>
-    mutate(species = gsub("Unio desectus","Unio crassus",species)) |>
-    mutate(species = gsub("Polyommatus eros","Polyommatus eroides",species)) |>
-    mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) |>
+# input is species points
+
+species_samples_eea_minimum <- species_samples |>
     rbind(p_apollo_dist_d)
 
 # national distribution as dataset
@@ -548,28 +337,173 @@ species_samples_eea_minimum_dist_no_gbif <- species_samples_eea_minimum_dist |>
 national_orphans <- species_dist_national_comp |>
     filter(!c(composite_key %in% unique(species_samples_eea_minimum_dist_no_gbif$composite_key))) |>
     mutate(DistrMap_2013_2018 = TRUE) |>
+    mutate(individualCount = NA) |>
     mutate(includeDistribution = TRUE) 
 
 #----------------------------------------------------------------------------#
-# final file with distribution and orphan cells
+# final file with the previous distribution and orphan cells
 # compose final presence file
+# some species filtering are applied to inform the calculation of Distribution
 #----------------------------------------------------------------------------#
 
-species_samples_presence_final <- species_samples_eea_minimum_dist |>
+#----------------------------------------------------------------------------#
+## presence file with orphans
+species_samples_presence_minimum <- species_samples_eea_minimum_dist |>
     rbind(national_orphans) |>
-    dplyr::select(-composite_key) |>
-    mutate(includeDistribution=if_else(species=="Parnassius apollo" & datasetName %in% c("E1X_DB_references","DistrMap_2013_2018"),FALSE,includeDistribution)) |>
-    mutate(includeDistribution=if_else(species=="Stenobothrus eurasius" & CELLCODE_eea_10km %in% c("10kmE535N184"),FALSE,includeDistribution)) |>
-    mutate(includeDistribution=if_else(species=="Vertigo angustior" & CELLCODE_eea_10km %in% c("10kmE555N208"),FALSE,includeDistribution)) |>
-    mutate(includeDistribution=if_else(species=="Vertigo moulinsiana" & CELLCODE_eea_10km %in% c("10kmE555N208"),FALSE,includeDistribution)) 
-
-
-# file to determine
-write_delim(species_samples_presence_final, "../results/species_samples_presence_final.tsv",delim="\t")
+    dplyr::select(-composite_key) 
 
 #----------------------------------------------------------------------------#
+###################### Extract data to species occurrences ####################
+#----------------------------------------------------------------------------#
 
-## summary
+################ elevation ################
+
+### EU DEM Greece
+eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
+#eu_dem_gr_4258 <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_gr.tif")
+
+species_samples_presence_minimum_sf <- species_samples_presence_minimum |>
+    st_as_sf(coords=c("decimalLongitude","decimalLatitude"),
+             remove=F,
+             crs="WGS84")
+
+vect_points <- terra::vect(species_samples_presence_minimum_sf)
+  
+vals <- terra::extract(eu_dem_gr, vect_points)[, -1, drop = FALSE]
+
+species_samples_presence_sf <- cbind(species_samples_presence_minimum_sf, vals)
+
+#################### distance from land and/or border of Greece #############
+
+species_samples_presence_sf_ETRS89 <- st_transform(species_samples_presence_sf, 3035)
+
+dist_matrix <- st_distance(species_samples_presence_sf_ETRS89, greece_regions_ETRS89)
+species_samples_presence_sf_ETRS89$minimumDistanceFromBorders <- apply(dist_matrix, 1, min)
+
+points <- species_samples_presence_sf_ETRS89
+
+# points inside
+points_inside_or_touching <- points[points$minimumDistanceFromBorders ==0, ]
+
+# Keep only points within 500, 2000 m of any polygon
+points_away_500m <- points[points$minimumDistanceFromBorders >500, ]
+# Keep only points with distance > 2000 of any polygon
+points_away_2km <- points[points$minimumDistanceFromBorders > 2000, ]
+# Keep all points within 500 m of any polygon
+points_500m <- points[points$minimumDistanceFromBorders > 0 & points$minimumDistanceFromBorders <500, ]
+
+## save points outside
+points_outside_cols <- points |>
+    filter(minimumDistanceFromBorders >0) |>
+    dplyr::select(species, datasetName,basisOfRecord,geometry,minimumDistanceFromBorders,eudem_dem_4258_europe) |>
+    arrange(species)
+
+write_delim(points_outside_cols,
+            "../results/species_occurrences_outside_gr_land.tsv",
+            delim="\t")
+# plot
+
+points_gr_plot <- ggplot() +
+    geom_sf(data = eea_10km_ETRS89, aes(color = "eea"), fill="transparent", shape = 16, show.legend = TRUE) +
+    geom_sf(data = greece_regions_ETRS89, aes(color = "Polygons"), fill = NA, show.legend = TRUE) +
+    geom_sf(data = points_inside_or_touching, aes(color = "Points inside"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_500m, aes(color = "Points away < 500m"), shape = 1, show.legend = TRUE) +
+    geom_sf(data = points_away_500m, aes(color = "Points away > 500m"), shape = 1, show.legend = TRUE) +
+    scale_color_manual(
+      name = "Feature Type",
+      values = c(
+        "Gr borders" = "blue",
+        "Points inside" = "black",
+        "Points away > 500m" = "blue",
+        "Points away < 500m" = "red"
+      )
+    ) +
+    theme_bw()+
+    theme(legend.position="inside",
+          legend.position.inside = c(0.87, 0.75))
+
+ggsave(plot=points_gr_plot,
+       "../figures/map_occurrences_borders_filtering.png",
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+#----------------------------------------------------------------------------#
+####################### Custom filters for includeDistribution################
+##############################################################################
+#----------------------------------------------------------------------------#
+
+species_samples_presence_sf_ETRS89_dist <- species_samples_presence_sf_ETRS89 |>
+    mutate(species = if_else(species=="Zerynthia polyxena" & decimalLatitude < 36,
+                                    "Zerynthia cretica",
+                                    species)) |>
+    mutate(includeDistribution=if_else(species=="Zerynthia cretica", 
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(minimumDistanceFromBorders <500,
+                                       TRUE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Rosalia alpina" & 
+                                       minimumDistanceFromBorders > 500 &
+                                       datasetName=="NECCA_redlist",
+                                   TRUE,
+                                   includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Stenobothrus eurasius" & CELLCODE_eea_10km %in% c("10kmE535N184"),
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Probaticus subrugosus" & CELLCODE_eea_10km %in% c("10kmE524N175"),
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Pseudophilotes bavius" & CELLCODE_eea_10km %in% c("10kmE535N176"),
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Vertigo moulinsiana",
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species == "Parnassius apollo" & eudem_dem_4258_europe <= 450,
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Parnassius apollo" & datasetName %in% c("E1X_DB_references","DistrMap_2013_2018"),
+                                       FALSE,
+                                       includeDistribution)) |>
+    mutate(includeDistribution=if_else(species=="Parnassius apollo" & 
+                                       minimumDistanceFromBorders > 100 & ## remove after the correct altitute file inclusion
+                                       datasetName=="E1X_MDPP_2014_2024",
+                                   TRUE,
+                                   includeDistribution))
+
+
+# includePopulation filtering
+species_samples_presence_eea_1km <- st_join(species_samples_presence_sf_ETRS89_dist,
+                      eea_1km_ETRS89_min)
+
+species_samples_presence_pop <- species_samples_presence_eea_1km |>
+    mutate(includePopulation=if_else(datasetName %in% c(
+                                                        "E1X_DB_references",
+                                                        "DistrMap_2013_2018"),
+                                     FALSE,
+                                     includeDistribution)) |>
+    mutate(includePopulation=if_else(species=="Vertigo angustior",
+                                     FALSE,
+                                     includePopulation)) 
+
+#----------------------------------------------------------------------------#
+########## FINAL FILE WITH ALL PRESENCE INFORMATION PER SPECIES #############
+#----------------------------------------------------------------------------#
+
+species_samples_presence_final <- species_samples_presence_pop |>
+    st_drop_geometry() |>
+    filter(datasetName!="Invertebrates_records_Olga") 
+
+write_delim(species_samples_presence_final,
+            "../results/species_samples_presence_final.tsv",
+            delim="\t")
+
+#----------------------------------------------------------------------------#
+## presence file summary
+#----------------------------------------------------------------------------#
 species_samples_eea_10km_base_s <- species_samples_presence_final |>
     group_by(species,decimalLongitude,decimalLatitude,CELLCODE_eea_10km) |>
     summarise(n_duplicates=n(),
@@ -579,7 +513,7 @@ species_samples_eea_10km_base_s <- species_samples_presence_final |>
 
 write_delim(species_samples_eea_10km_base_s, "../results/species_samples_eea_10km_base.tsv",delim="\t")
 
-### find the cellcodes origin
+### find the cellcodes origin datasets 
 species_samples_eea_10km_s <- species_samples_presence_final |>
     distinct(species,CELLCODE_eea_10km,datasetName) |>
     group_by(species,CELLCODE_eea_10km) |>
@@ -588,7 +522,7 @@ species_samples_eea_10km_s <- species_samples_presence_final |>
               .groups="keep") |>
     ungroup()
 
-write_delim(species_samples_cellcode_s, "../results/species_samples_cellcode_s.tsv",delim="\t")
+write_delim(species_samples_eea_10km_s, "../results/species_samples_eea_10km_s.tsv",delim="\t")
 
 ## read final data as sf points for to create a map
 species_samples_presence_final_sf <- species_samples_presence_final |>
@@ -597,22 +531,92 @@ species_samples_presence_final_sf <- species_samples_presence_final |>
              remove=F,
              crs=4326)
 
-species_samples_presence_final_sf_dist <- species_samples_presence_final_sf |>
+# transform to LAEA Europe
+species_samples_presence_final_ETRS89 <- st_transform(species_samples_presence_final_sf, 3035)
+
+species_samples_presence_final_ETRS89_dist <- species_samples_presence_final_ETRS89 |>
     filter(includeDistribution==TRUE)
 
-st_write(species_samples_presence_final_sf_dist, "../results/species_samples_presence_final_sf.gpkg", layer = "species_samples_presence_final_sf", delete_layer = TRUE)
+st_write(species_samples_presence_final_ETRS89_dist,
+         "../results/species_samples_presence_final_ETRS89_dist.gpkg",
+         layer = "species_samples_presence_final_ETRS89_dist",
+         delete_layer = TRUE)
+#----------------------------------------------------------------------------#
+###### species metrics, population, population_n2k, distribution, range#######
+#----------------------------------------------------------------------------#
 #----------------------------------------------------------------------------#
 #### Distribution ####
 #----------------------------------------------------------------------------#
 
 distributions <- species_samples_presence_final |>
+    left_join(grids_in_greece_min, by=c("CELLCODE_eea_10km"="CELLCODE_eea_10km")) |>
     filter(includeDistribution==TRUE) |>
-    distinct(species, CELLCODE_eea_10km) |>
+    distinct(species, CELLCODE_eea_10km,AreaKm2) |>
     group_by(species) |>
-    summarise(n_cells_dis=n())
+    summarise(CellCount=n(), AreaKm2=round(sum(AreaKm2),digits=2))
+
+write_delim(distributions, "../results/distributions_presence_final.tsv",delim="\t")
 
 #----------------------------------------------------------------------------#
 ## population
+#----------------------------------------------------------------------------#
+populations <- species_samples_presence_final |>
+    filter(includePopulation==TRUE) |>
+    distinct(species, CELLCODE_eea_1km) |>
+    group_by(species) |>
+    summarise(CellCount=n(), AreaKm2=n())
+
+write_delim(populations, "../results/populations_presence_final.tsv",delim="\t")
+#----------------------------------------------------------------------------#
+## Natura2000
+#----------------------------------------------------------------------------#
+
+# include Natura2000 columns : SITECODE and SITETYPE
+#N2000_v32_ETRS89
+
+species_samples_presence_nat <- st_join(species_samples_presence_pop,
+                      N2000_v32_ETRS89)
+
+stop("Spatial analysis and Master Files are ready. Exiting script.")
+#----------------------------------------------------------------------------#
+############################ OLD ###########################
+#----------------------------------------------------------------------------#
+
+#points_gr <- points[points$minimumDistanceFromBorders <500, ]
+
+#points_gr_s <- points_gr
+#### Parnassius apollo
+#points_gr_s <- points_gr_s |>
+#    filter(!(species == "Parnassius apollo" & X_eudem_dem_4258_europe <= 450))
+## this removes points of P. apollo that are below 450 altitude, from red list assessment.
+#
+#### Phengaris arion
+####
+####
+#### Zerynthia polyxena
+#### remove the occurrences from Crete, and south Aegean in general
+#### because it is consindered as a different species
+#
+#points_gr_s_z <- points_gr_s |>
+#    filter(!(species == "Zerynthia polyxena" & decimalLatitude < 36))
+#
+#### rename Hirudo medicinalis to Hirudo verbana
+#points_gr_s_z_h <- points_gr_s_z |>
+#    mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |> 
+#    #mutate(species = gsub("Paracossulus thrips","Catopta thrips",species)) |> 
+#    mutate(species = gsub("Osmoderma eremita","Osmoderma lassallei",species))
+#### eremita => lassallei
+#### Paracossulus => Catopta
+#
+#### Unio pictorum
+#
+#points_final <- points_gr_s_z_h
+#
+
+
+
+
+
 
 ## points
 species_info <- species_samples_art17 |>
@@ -1200,123 +1204,8 @@ ggsave(paste0("../figures/map_orphan_cells.png", sep=""),
        device="png")
 
 
-
-
 species_range_combined <- bind_rows(species_range, .id = "species")
 st_write(species_range_combined, "../results/species_range_combined.gpkg",
          layer = "species_range", driver = "GPKG", delete_layer = TRUE)
 
 
-
-#species_range_trimmed <- 
-
-############################## Hilda analysis ##############################
-
-results_ext_3 <- extract_from_named_rasters(hilda_rast_list,points_final)
-
-
-for (i in 1:length(hilda_files)){
-    print(i)
-    filename <- hilda_files[i]
-    
-    raster_file <- rast(paste0(hilda_path,hilda_files[i],sep=""))
-    ### terra (or raster in R) gives you very small floating point numbers instead of nice, clean integers or just zeros.
-    raster_file <- round(raster_file)
-    raster_name <- paste0("hilda_",gsub(".*([0-9]{4}).*", "\\1", filename),sep="")
-    
-    raster_df <- terra::as.data.frame(raster_file, xy=TRUE, cells=TRUE)
-
-    raster_df <- raster_df |>
-        mutate(hilda_id=round(raster_df[,4], digits = 0)) |>
-        filter(hilda_id>0) |>
-        mutate(hilda_id=as.character(hilda_id)) |>
-        left_join(hilda_cat, by=c("hilda_id"="hilda_id"))
-    
-    raster_df$hilda_name <- factor(raster_df$hilda_name, levels=as.character(unique(sort(raster_df$hilda_name))))
-    
-    g_hilda_map <- ggplot() +
-        geom_sf(greece_regions, mapping=aes()) +
-        geom_raster(raster_df,
-                    mapping=aes(x=x, y=y, fill=hilda_name)) +
-        scale_fill_manual(values=hilda_cat_v) +
-        guides(fill = guide_legend(nrow = 1)) +
-        ggtitle(raster_name)+
-        theme(axis.title=element_blank(),
-              legend.position="bottom",
-              legend.key.size = unit(4, "mm"), 
-              legend.text=element_text(size=8),
-              legend.title=element_blank())
-    
-#    ggsave(paste0("../plots/hilda_crete/crete_",raster_name,"_map.png",sep=""),
-#           plot=g_hilda_map,
-#           height = 10, 
-#           width = 20,
-#           dpi = 300, 
-#           units="cm",
-#           device="png")
-    
-    hilda_sum <- zonal(cellSize(raster_file), raster_file, "sum") |> 
-        mutate(area_m2=units::set_units(area,m^2)) |>
-        mutate(area=units::set_units(area/10^6, km^2)) 
-    
-    hilda_sum <- hilda_sum |>
-        mutate(hilda_id=as.character(hilda_sum[,1])) |>
-        filter(hilda_sum[,1]>0) |>
-        left_join(hilda_cat) 
-
-    land_cover_colors <- c(
-                           "urban" = "#000000",
-                           "cropland" = "#AE6120",
-                           "pasture/rangeland" = "#98BA6A",
-                           "forest" = "#07A07D",
-                           "unmanaged grass/shrubland" = "#BE81A3",
-                           "sparse/no vegetation" = "#999999",
-                           "water" = "#1370A1"
-    )
-    
-    hilda_sum_g <- ggplot()+
-        geom_col(hilda_sum,
-                 mapping= aes(y=as.numeric(area),
-                              x="",
-                              fill = hilda_name),
-                 position = position_stack(),
-                 width = 0.2) +
-        scale_fill_manual(values=land_cover_colors) +
-        scale_x_discrete(expand = expansion(add=c(0,0)))+
-#        scale_y_continuous(breaks=seq(0,9000,1000),
-#                           limits=c(0,8900),
-#                           expand = c(0,0))+
-        ylab("Area sq. km") +
-        xlab("") +
-        theme_bw()+
-        theme(legend.position='none',
-              axis.ticks.x=element_blank(),
-              panel.border = element_blank(),
-              panel.grid.major = element_blank(), #remove major gridlines
-              panel.grid.minor = element_blank()) #remove minor gridlines
-    
-#    ggsave(paste0("../plots/hilda_crete/crete_",raster_name,"_bar.png",sep=""),
-#           plot=hilda_sum_g,
-#           height = 10, 
-#           width = 10,
-#           dpi = 300, 
-#           units="cm",
-#           device="png")
-
-    fig_hilda <- ggarrange(g_hilda_map,hilda_sum_g,
-              labels = c("A", "B"),
-              ncol = 2,
-              nrow = 1,
-              widths = c(0.85,0.15),
-              font.label=list(color="black",size=15),
-              common.legend = TRUE,
-              legend="bottom") + bgcolor("white")
-    
-    ggsave(paste0("../figures/hilda_greece/greece_",raster_name,".png",sep=""), 
-           plot=fig_hilda, 
-           height = 10, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-}
