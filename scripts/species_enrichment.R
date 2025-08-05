@@ -82,7 +82,7 @@ print("end gbif")
 #------------------------------------------------------------------------------#
 ######## NECCA compilation of previous Monitoring Data not included in ENVECO database
 #------------------------------------------------------------------------------#
-E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v7.xlsx",
+E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v8.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T) |> slice(-1) |> 
     mutate(decimalLatitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
@@ -92,7 +92,7 @@ E1X_MDPP_2014_2024_samples_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕ�
     mutate(basisOfRecord="MATERIAL_SAMPLE")
 
 
-E1X_MDPP_2014_2024_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v7.xlsx",
+E1X_MDPP_2014_2024_species_data <- read_xlsx("../data/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v8.xlsx",
                            sheet="Είδη",
                            col_names=T
                            ) |> slice(-1)
