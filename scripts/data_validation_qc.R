@@ -36,6 +36,7 @@ E2X_DB <- verified |>
 
 write_delim(E2X_DB,"../data/E2X_DB.tsv",delim="\t")
 
+# ------------- Data from other datasets -----------#
 ###
 species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
 
@@ -547,7 +548,7 @@ points_dem_sum <- points_with_vals |>
 ########################### Validation - QC Protogeni epopteia 2025 ##################
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ_V6.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/20250804_FINAL Invertebrates ΠΒΔ v6.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
@@ -578,7 +579,7 @@ st_write(deigmata_data_sf,
 
 ######## Eidi
 
-eidi_data <- read_xlsx("../anadoxos_deliverables/FINAL Invertebrates ΠΒΔ_V6.xlsx",
+eidi_data <- read_xlsx("../anadoxos_deliverables/20250804_FINAL Invertebrates ΠΒΔ v6.xlsx",
                        sheet="Είδη",
                        col_names=T
                            ) |> slice(-1) |> filter(!is.na(Obs_ID))
