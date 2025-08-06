@@ -16,8 +16,7 @@ library(readxl)
 library(taxize)
 library(rgbif)
 library(units)
-library(vegan)
-library(rnaturalearth)
+#library(rnaturalearth)
 source("necca_spatial_functions.R")
 
 
@@ -25,6 +24,9 @@ source("necca_spatial_functions.R")
 ###
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
 greece_regions_vec <- vect(greece_regions)
+
+greece_regions_bbox <- st_bbox(greece_regions) |> st_as_sfc()
+greece_regions_bbox_sf <- st_sf(geometry = greece_regions_bbox, crs = st_crs(greece_regions))
 
 ########################## species information ##############################
 # the species of the previous epopteia 2015
@@ -289,9 +291,9 @@ for (f in world_clim_files) {
         
         #read_raster
         path_raster <- f
-        crop_raster_by_shp(path_raster,greece_regions,output_directory)
+        crop_raster_by_shp(path_raster,greece_regions_bbox_sf,output_directory)
         
-        rm(path_raster,raster_tmp,crete_raster,output_raster)
+        rm(path_raster,raster_tmp,output_raster)
 
     }else{
         
@@ -314,9 +316,9 @@ for (f in hilda_directory_files) {
         
         #read_raster
         path_raster <- f
-        crop_raster_by_shp(path_raster,greece_regions,output_directory)
+        crop_raster_by_shp(path_raster,greece_regions_bbox_sf,output_directory)
         
-        rm(path_raster,raster_tmp,crete_raster,output_raster)
+        rm(path_raster,raster_tmp,output_raster)
 
     }else{
         
@@ -329,16 +331,16 @@ for (f in hilda_directory_files) {
 corine_file <- "/Users/talos/Documents/spatial_data/u2018_clc2018_v2020_20u1_raster100m/DATA/U2018_CLC2018_V2020_20u1.tif"
 corine_gr_d <- "../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/"
 # crop
-crop_raster_by_shp(corine_file,greece_regions,corine_gr_d)
+crop_raster_by_shp(corine_file,greece_regions_bbox_sf,corine_gr_d)
 
 corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
 
 #### EU DEM
 ###https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD
 # crop the eu dem file, it is 20gb.
-eu_dem_file <- "/Users/talos/Downloads/EU_DEM_mosaic_5deg/eudem_dem_4258_europe.tif"
+eu_dem_file <- "/Users/talos/Documents/spatial_data/EU_DEM_mosaic_5deg/eudem_dem_4258_europe.tif"
 eurodem_gr_d <- "../spatial_data/EU_DEM_mosaic_5deg_gr/"
-crop_raster_by_shp(eu_dem_file,greece_regions,eurodem_gr_d)
+crop_raster_by_shp(eu_dem_file,greece_regions_bbox_sf,eurodem_gr_d)
 
 # Then reload in different name and change crs
 eu_dem <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_gr.tif")
@@ -350,10 +352,10 @@ terra::writeRaster(eu_dem_wgs84,
                    overwrite=TRUE)
 
 #### EU dem slope
-eu_dem_slope_file <- "/Users/talos/Downloads/EUD_CP_SLOP_mosaic/eudem_slop_3035_europe.tif"
+eu_dem_slope_file <- "/Users/talos/Documents/spatial_data/EUD_CP_SLOP_mosaic/eudem_slop_3035_europe.tif"
 
 eu_dem_slope_gr_d <- "../spatial_data/EU_DEM_slope_gr/"
-crop_raster_by_shp(eu_dem_slope_file,greece_regions,eu_dem_slope_gr_d)
+crop_raster_by_shp(eu_dem_slope_file,greece_regions_bbox_sf,eu_dem_slope_gr_d)
 
 # Then reload in different name and change crs
 eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
@@ -368,7 +370,7 @@ eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europ
 ecosystem_types <- "/Users/talos/Documents/spatial_data/Ecosystem_types_of_Europe_version_3.1_Terrestrial/eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif"
 
 ecosystem_types_gr_d <- "../spatial_data/ecosystem_types_gr/"
-crop_raster_by_shp(ecosystem_types,greece_regions,ecosystem_types_gr_d)
+crop_raster_by_shp(ecosystem_types,greece_regions_bbox_sf,ecosystem_types_gr_d)
 
 
 #ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
@@ -396,8 +398,8 @@ writeRaster(gr_1km_rast_wgs, "../spatial_data/eea_reference_grid/gr_1km_wgs.tif"
 ### keep only land
 
 bbox_sf <- st_as_sf(st_as_sfc(st_bbox(greece_regions)))
-gr_1km_c <- crop(gr_1km_rast_wgs,bbox_sf)
-gr_1km_terra <- mask(gr_1km_c, greece_regions)
+gr_1km_c <- crop(gr_1km_rast_wgs,greece_regions_bbox_sf)
+gr_1km_terra <- mask(gr_1km_c, greece_regions_bbox_sf)
 
 writeRaster(gr_1km_terra, "../spatial_data/eea_reference_grid/gr_1km_terra.tif",overwrite=TRUE)
 
