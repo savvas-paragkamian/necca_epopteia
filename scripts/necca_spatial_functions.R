@@ -135,12 +135,14 @@ extract_from_named_rasters <- function(raster_list, points_sf) {
 expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance_m = 40000, cellcode_col = "CELLCODE") {
 
     # 0. initiate
-    grids <- distribution # species distribution
+    grids <- distribution |>
+        mutate(cell_origin="distribution")# species distribution
 
     # 1. Calculate centroid distances
     centroids <- st_centroid(grids)
     dist_matrix <- st_distance(centroids, which="Euclidean")
     dist_num <- drop_units(dist_matrix)
+    #print("centroids")
     
     # 2. Name rows/columns of matrix by CELLCODE
     cellcode <- grids[[cellcode_col]]
@@ -153,6 +155,7 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
     adj_matrix[adj_matrix <= 0 | adj_matrix > gap_distance_m] <- 0
     diag(adj_matrix) <- 0
     
+    #print("matrix")
     # 4. Convert adjacency matrix to edgelist
     edge_list <- which(adj_matrix != 0, arr.ind = TRUE)
     edge_df <- data.frame(
@@ -161,11 +164,13 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
         weight = adj_matrix[edge_list]
     )
     
+    #print("edgelist")
     # 5. Join centroid geometries for from/to
     centroids_df <- centroids %>% st_drop_geometry() %>% mutate(geometry = st_geometry(centroids))
     from_geom <- centroids[match(edge_df$from, cellcode), ]
     to_geom   <- centroids[match(edge_df$to, cellcode), ]
     
+    #print("join centroid")
     # 6. Create lines between centroids
     line_list <- mapply(
       function(p1, p2) st_linestring(matrix(c(st_coordinates(p1), st_coordinates(p2)), ncol = 2, byrow = TRUE)),
@@ -180,14 +185,19 @@ expand_range_with_gap_distance <- function(distribution, full_grid, gap_distance
         geometry = st_sfc(line_list, crs = st_crs(grids))
     )
     
+    #print("connect with line")
     # 7. Find cells in full grid intersecting these lines
-    intersecting_cells <- st_intersects(full_grid, lines_sf, sparse = FALSE)
+    intersecting_cells <- st_crosses(full_grid, lines_sf, sparse = FALSE)
     filled_cells <- full_grid[apply(intersecting_cells, 1, any), ] %>%
         mutate(cell_origin = "range")
+    #print(colnames(filled_cells))
+    #print(colnames(grids))
     
+    #print("find grids intersect with lines")
     # 8. Return union of filled cells and original grids
     expanded_grid <- rbind(filled_cells, grids) %>% distinct()
     
+    print("range calculated")
     return(expanded_grid)
 }
 

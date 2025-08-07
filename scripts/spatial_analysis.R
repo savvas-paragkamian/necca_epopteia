@@ -702,8 +702,8 @@ stop("Spatial analysis and Master Files are ready. Exiting script.")
 
 
 #----------------------------------------------------------------------------#
-################################## MAPS ########################################
-################################################################################
+################################# MAPS #######################################
+##############################################################################
 #----------------------------------------------------------------------------#
 
 species_with_data <- unique(species_samples_presence_final_sf$species)
@@ -771,7 +771,6 @@ g_art17_n2000 <- g_base_n2000 +
            color=guide_legend(position = "right",override.aes = list(linetype = 0,fill=NA)))+
     theme(legend.position = "right")
 
-
 ggsave("../figures/map_art17_invertebrates_natura.png", 
            plot=g_art17_n2000, 
            height = 30, 
@@ -781,7 +780,7 @@ ggsave("../figures/map_art17_invertebrates_natura.png",
            device="png")
 
 #----------------------------------------------------------------------------#
-############################## Species Occurrences ##############################
+############################ Species Occurrences #############################
 #----------------------------------------------------------------------------#
 
 ### figures of each invertebrate of art17 for Greece
@@ -825,6 +824,101 @@ for (i in seq_along(species_with_data)){
            device="png")
 
 }
+
+################################ Species Range ##############################
+
+# calculate range for all species
+
+species_range = list()
+polygons_no_points_all <- list()
+colors_cell_origin <- c("range"="mediumvioletred",
+                        "distribution"="limegreen")
+
+for (i in seq_along(species_with_data)){
+    #i=1
+    species_occurrences <- species_samples_presence_final_sf |>
+        filter(species==species_with_data[i])
+    species_dist <- species_samples_presence_final_sf |>
+        filter(species==species_with_data[i]) |>
+        filter(includeDistribution==TRUE) |>
+        st_drop_geometry() |>
+        distinct(species, CELLCODE_eea_10km) |>
+        rename("CELLCODE"="CELLCODE_eea_10km")
+    
+    grids <- eea_10km_ETRS89 |>
+        filter(CELLCODE %in% unique(species_dist$CELLCODE))
+    
+    # run the function for range calculations
+    expanded_range <- expand_range_with_gap_distance(distribution = grids,
+                                                     full_grid = eea_10km_ETRS89,
+                                                     gap_distance_m = 40000)
+
+    species_range[[species_with_data[i]]] <- expanded_range
+
+    cell_origin_colors_f <- colors_cell_origin[unique(expanded_range$cell_origin)]
+
+    # Maps
+    species_gr_map <- g_base_n2000 +
+        new_scale_fill()+
+        geom_sf(expanded_range, mapping=aes(fill=cell_origin),
+                alpha=0.8,
+                colour="transparent",
+                na.rm = F) +
+        scale_fill_manual(
+                          values=cell_origin_colors_f ,
+                          guide = guide_legend(
+                                                override.aes = list(
+                                                                    linetype="solid",
+                                                                    shape = NA)
+                                                ),
+                           name="Cell origin"
+                           )+
+        geom_sf(species_occurrences,
+                mapping=aes(
+                            color=datasetName),
+                size=1,
+                alpha=0.9,
+                show.legend=T) +
+        scale_color_manual(values=dataset_colors_f,
+                            name = "Datasets")+
+        guides(
+               fill=guide_legend(position = "right",override.aes = list(linetype = 0,color=NA)))+
+        ggtitle(paste(species_with_data[i]))+
+        theme_bw()+
+        theme(axis.title=element_blank(),
+              axis.text=element_text(colour="black"),
+              legend.title = element_text(size=8),
+              legend.position = "right",
+              legend.box.background = element_blank())
+    
+    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_range.png", sep=""), 
+           plot=species_gr_map, 
+           height = 28, 
+           width = 35,
+           dpi = 300, 
+           units="cm",
+           device="png")
+    
+}
+
+all_range <- bind_rows(
+  lapply(names(species_range), function(name) {
+    species_range[[name]] %>%
+      mutate(species = name)
+  })
+)
+
+st_write(all_range, "../results/species_range/species_range.shp")
+
+##### calculate range
+
+all_range_species <- all_range |>
+    st_drop_geometry() |>
+    distinct(CELLCODE,species) |>
+    group_by(species) |>
+    summarise(n_cells=n())
+
+#species_range_all <- rbind(species_range)
 
 ############################## Species Distribution ##############################
 
@@ -987,128 +1081,4 @@ for (i in seq_along(species_with_data)){
 
 }
 
-
-################################ Species Range ##############################
-
-# calculate range for all species
-
-species_range = list()
-polygons_no_points_all <- list()
-colors_cell_origin <- c("range"="mediumvioletred",
-                        "distribution"="limegreen",
-                        "distribution orphan cell"="lightsalmon4")
-
-for (i in seq_along(species_with_data)){
-    #i=1
-    species_occurrences <- species_samples_art17 |>
-        filter(species==species_with_data[i]) |>
-        filter(datasetName!="GBIF")
-    
-    # distribution 
-    species_dist <- species_dist_national_rep_wgs_s |>
-        filter(submittedName==species_with_data[i])
-
-    # find the grids that don't have points
-    dist_int <- st_intersects(species_dist, species_occurrences)
-    no_points_index <- lengths(dist_int) == 0 
-    points_index <- lengths(dist_int) > 0 
-    polygons_without_points <- species_dist[no_points_index, ] 
-    polygons__points <- species_dist[points_index, ] 
-    polygons_no_points_all[[i]]<- polygons_without_points
-
-    polygons_without_points_centroids <- st_centroid(polygons_without_points)
-
-    eea_polygons_without_points <- st_intersects(eea_10km_wgs,polygons_without_points_centroids)
-    eea_polygons_without_points_a <- eea_10km_wgs[lengths(eea_polygons_without_points) > 0,] |>
-        mutate(cell_origin="distribution orphan cell")
-
-    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
-    locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
-        distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
-        group_by(geometry,CELLCODE) |>
-        summarise(n_samples=n(),.groups="keep")
-    
-    grids <- eea_10km_wgs |>
-        filter(CELLCODE %in% locations_10_grid_samples$CELLCODE) |>
-        mutate(cell_origin="distribution") |>
-        rbind(eea_polygons_without_points_a)
-    
-    expanded_range <- expand_range_with_gap_distance(distribution = grids,
-                                                     full_grid = eea_10km_wgs,
-                                                     gap_distance_m = 40000)
-
-    species_range[[species_with_data[i]]] <- expanded_range
-
-
-    cell_origin_colors_f <- colors_cell_origin[unique(expanded_range$cell_origin)]
-
-    # Maps
-    species_gr_map <- ggplot()+
-        geom_sf(greece_regions, mapping=aes()) +
-        geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
-                alpha=0.6,
-                #colour="transparent",
-                na.rm = F,
-                show.legend=T) +
-        scale_fill_manual(
-                          values= natura_colors,
-                          guide = guide_legend(
-                                                override.aes = list(alpha=1,
-                                                                    linetype="solid",
-                                                                    shape = NA)
-                                                ),
-                           name="Natura2000"
-                           )+
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(alpha=1, linetype = 0,color=NA)),
-               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
-        new_scale_fill()+
-        geom_sf(polygons_without_points, mapping=aes(fill="Cells without points"),
-                alpha=0.8,
-                colour="transparent",
-                na.rm = F) +
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
-        new_scale_fill()+
-        geom_sf(expanded_range, mapping=aes(fill=cell_origin),
-                alpha=0.8,
-                colour="transparent",
-                na.rm = F) +
-        scale_fill_manual(
-                          values=cell_origin_colors_f ,
-                          guide = guide_legend(
-                                                override.aes = list(
-                                                                    linetype="solid",
-                                                                    shape = NA)
-                                                ),
-                           name="Cell origin"
-                           )+
-        geom_point(species_occurrences,
-                mapping=aes(x=decimalLongitude,
-                            y=decimalLatitude,
-                            color=datasetName),
-                size=1,
-                alpha=0.6,
-                show.legend=T) +
-        scale_color_manual(values=dataset_colors_f,
-                            name = "Datasets")+
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
-        ggtitle(paste(species_with_data[i]))+
-        theme_bw()+
-        theme(axis.title=element_blank(),
-              axis.text=element_text(colour="black"),
-              legend.title = element_text(size=8),
-              legend.position.inside = c(0.87, 0.75),
-              legend.box.background = element_blank())
-    
-    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_range.png", sep=""), 
-           plot=species_gr_map, 
-           height = 20, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-    
-}
 
