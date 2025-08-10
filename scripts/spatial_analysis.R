@@ -2,7 +2,12 @@
 
 ## Script name: spatial_analysis.R
 ##
-## Purpose of script:
+## Purpose of script: Enrich species occurrences with spatial data in 
+## order to perfom quality control. No occurrence is removed but is 
+## annotated in includeDistribution and includePopulation binary variables. 
+## Multiple conditions are used to assign a TRUE or FALSE to these variables.
+## In summary, this script tajjj
+## See b
 ## 1. Load all data
 ## 2. Enrich occurrences with spatial info
 ## 3. Quality control based on custom filters (e.g elevation) of species
@@ -17,7 +22,7 @@
 ##
 ## Author: Savvas Paragkamian
 ## 
-## Runtime: 2 minutes without creating maps
+## Runtime: 6 minutes 
 ##
 ## Date Created: 2024-11-06
 
@@ -694,12 +699,7 @@ populations_nat_c_t <- populations_nat_c |>
 
 write_delim(populations_nat_c_t,"../results/populations_nat_c_t.tsv",delim="\t")
 
-stop("Spatial analysis and Master Files are ready. Exiting script.")
-
-#----------------------------------------------------------------------------#
-## presence file summary
-#----------------------------------------------------------------------------#
-
+#stop("Spatial analysis and Master Files are ready. Exiting script.")
 
 #----------------------------------------------------------------------------#
 ################################# MAPS #######################################
@@ -825,8 +825,9 @@ for (i in seq_along(species_with_data)){
 
 }
 
+#----------------------------------------------------------------------------#
 ################################ Species Range ##############################
-
+#----------------------------------------------------------------------------#
 # calculate range for all species
 
 species_range = list()
@@ -908,7 +909,7 @@ all_range <- bind_rows(
   })
 )
 
-st_write(all_range, "../results/species_range/species_range.shp")
+st_write(all_range, "../results/species_range/species_range.shp",append=TRUE)
 
 ##### calculate range
 
@@ -918,30 +919,30 @@ all_range_species <- all_range |>
     group_by(species) |>
     summarise(n_cells=n())
 
-#species_range_all <- rbind(species_range)
-
+#----------------------------------------------------------------------------#
 ############################## Species Distribution ##############################
+#----------------------------------------------------------------------------#
 
 for (i in seq_along(species_with_data)){
-    # use the 10X10 as a proxy of distribution
 
-    # distribution 
-    species_dist <- species_dist_national_rep_wgs_s |>
-        filter(submittedName==species_with_data[i])
+    species_occurrences <- species_samples_presence_final_sf |>
+        filter(species==species_with_data[i])
 
-    # find the grids that don't have points
-    dist_int <- st_intersects(species_dist, species_occurrences)
-    no_points_index <- lengths(dist_int) == 0 
-    points_index <- lengths(dist_int) > 0 
-    polygons_without_points <- species_dist[no_points_index, ] 
-    polygons__points <- species_dist[points_index, ] 
-
+    species_dist <- species_samples_presence_final_sf |>
+        filter(species==species_with_data[i]) |>
+        filter(includeDistribution==TRUE) |>
+        st_drop_geometry() |>
+        distinct(species, CELLCODE_eea_10km) |>
+        rename("CELLCODE"="CELLCODE_eea_10km")
     
     # summary of points with grids
-    locations_10_grid_samples <- st_join(eea_10km_wgs, species_occurrences, left=F) |>
-        distinct(geometry,CELLCODE, decimalLatitude, decimalLongitude) |>
-        group_by(geometry,CELLCODE) |>
-        summarise(n_samples=n(),.groups="keep")
+    locations_10_grid_samples <- species_occurrences |>
+        distinct(CELLCODE_eea_10km, decimalLatitude, decimalLongitude) |>
+        group_by(CELLCODE_eea_10km) |>
+        summarise(n_samples=n(),.groups="keep") |>
+        rename("CELLCODE"="CELLCODE_eea_10km") |>
+        left_join(eea_10km_ETRS89) |>
+        st_as_sf()
 
     # colors of datasets present
     dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
@@ -949,136 +950,44 @@ for (i in seq_along(species_with_data)){
     print(species_with_data[i])
 
     # Maps
-    species_gr_map <- ggplot()+
-        geom_sf(greece_regions, mapping=aes()) +
-        geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
-                alpha=0.6,
-                #colour="transparent",
-                na.rm = F,
-                show.legend=T) +
-        scale_fill_manual(
-                          values= natura_colors,
-                          guide = guide_legend(
-                                                override.aes = list(alpha=1,
-                                                                    linetype="solid",
-                                                                    shape = NA)
-                                                ),
-                           name="Natura2000"
-                           )+
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(alpha=1, linetype = 0,color=NA)),
-               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)))+
-        new_scale_fill()+
-        geom_sf(polygons_without_points, mapping=aes(fill="Cells without points"),
-                alpha=0.8,
-                colour="transparent",
-                na.rm = F) +
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
+    species_gr_map <- g_base_n2000 +
         new_scale_fill()+
         geom_sf(locations_10_grid_samples, mapping=aes(fill=n_samples),
-                alpha=0.8,
+                alpha=0.5,
                 colour="transparent",
                 na.rm = F) +
-        scale_fill_gradient(low="gray50",
-                            high="gray1",
-                            guide = "colourbar")+
+        scale_fill_viridis_c(option = "viridis",
+                             direction=1) +
+        geom_sf(species_occurrences,
+                mapping=aes(
+                            color=datasetName),
+                size=0.5,
+                alpha=0.5) +
+        scale_color_manual(values=dataset_colors_f,
+                            name = "Datasets")+
         guides(
-               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)),
-               fill = guide_colourbar(position = "inside",
+               color=guide_legend(position = "right",override.aes = list(linetype = 0,fill=NA)),
+               fill = guide_colourbar(position = "right",
                                       alpha = 1,
                                       ticks = F,
                                       label = T,
                                       title="n_samples",
                                       title.vjust = 0.8,
                                       order = 1))+
-        geom_point(species_occurrences,
-                mapping=aes(x=decimalLongitude,
-                            y=decimalLatitude,
-                            color=datasetName),
-                size=1,
-                alpha=0.6) +
-        scale_color_manual(values=dataset_colors_f,
-                            name = "Datasets")+
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
         ggtitle(paste(species_with_data[i]))+
         theme_bw()+
         theme(axis.title=element_blank(),
               axis.text=element_text(colour="black"),
               legend.title = element_text(size=8),
-              legend.position.inside = c(0.87, 0.65),
+              legend.position = "right",
               legend.box.background = element_blank())
     
     ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_distribution.png", sep=""), 
            plot=species_gr_map, 
-           height = 20, 
-           width = 25,
+           height = 28, 
+           width = 35,
            dpi = 300, 
            units="cm",
            device="png")
 
 }
-############################## Species Population ##############################
-### population is defined here as the number of 1X1km cells
-### remove GBIF
-########## Merge species occurrence data with previous distribution data#############
-
-for (i in seq_along(species_with_data)){
-    # use the 1X1 as a proxy of population
-
-    species_occurrences <- species_samples_art17 |>
-        filter(species==species_with_data[i]) |>
-        filter(datasetName!="GBIF")
-    
-    dataset_colors_f <- datasets_colors[unique(species_occurrences$datasetName)]
-
-    print(species_with_data[i])
-
-    # Maps
-    species_gr_map <- g_base_n2000+
-        geom_sf(locations_1_grid_samples, mapping=aes(fill=n_samples),
-                alpha=0.8,
-                colour="transparent",
-                na.rm = F) +
-        scale_fill_gradient(low="gray50",
-                            high="gray1",
-                            guide = "colourbar")+
-        guides(
-               color=guide_legend(position = "inside",override.aes = list(linetype = 0,fill=NA)),
-               fill = guide_colourbar(position = "inside",
-                                      alpha = 1,
-                                      ticks = F,
-                                      label = T,
-                                      title="n_samples",
-                                      title.vjust = 0.8,
-                                      order = 1))+
-        geom_point(species_occurrences,
-                mapping=aes(x=decimalLongitude,
-                            y=decimalLatitude,
-                            color=datasetName),
-                size=0.2,
-                alpha=0.6) +
-        scale_color_manual(values=dataset_colors_f,
-                            name = "Datasets")+
-        guides(
-               fill=guide_legend(position = "inside",override.aes = list(linetype = 0,color=NA)))+
-        ggtitle(paste(species_with_data[i]))+
-        theme_bw()+
-        theme(axis.title=element_blank(),
-              axis.text=element_text(colour="black"),
-              legend.title = element_text(size=8),
-              legend.position.inside = c(0.87, 0.65),
-              legend.box.background = element_blank())
-    
-    ggsave(paste0("../figures/species_maps/map_", species_with_data[i], "_population.png", sep=""), 
-           plot=species_gr_map, 
-           height = 20, 
-           width = 25,
-           dpi = 300, 
-           units="cm",
-           device="png")
-
-}
-
-
