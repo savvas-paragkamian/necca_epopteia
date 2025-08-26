@@ -39,8 +39,9 @@ N2000_v32_wgs <- st_transform(N2000_v32,4326)
 
 ########################### Load Species Data ###########################
 ### Species occurrences enriched ######
-species_samples_art17 <- read_delim("../results/species_samples_art17_private.tsv", delim="\t")
+species_samples_art17 <- read_delim("../results/species_samples_presence_final_private.tsv", delim="\t")
 
+            
 species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
 iucn_art17_invert_all <- read_delim("../results/iucn_art17_invert_all.tsv", delim="\t")
 iucn_art17_invert_no_tax <- iucn_art17_invert_all |>
@@ -70,7 +71,7 @@ parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Dis
 
 p_apollo_points <- species_art17_spatial |>
     filter(species=="Parnassius apollo") |>
-    mutate(A_VEG_TYPE_vegetation_map = as.factor(A_VEG_TYPE_vegetation_map))
+    filter(includeDistribution==TRUE)
 
 apollo_mean <- p_apollo_points |>
     summarise(
@@ -87,6 +88,7 @@ apollo <- p_apollo_points |>
     st_drop_geometry() |>
     dplyr::select(decimalLatitude,decimalLongitude)
 
+points_convex <- st_convex_hull(st_union(p_apollo_points))
 
 ### hotspot
 locations_10_grid_samples <- st_join(gr_10km, p_apollo_points, left=F) |>
@@ -96,8 +98,9 @@ locations_10_grid_samples <- st_join(gr_10km, p_apollo_points, left=F) |>
 
 datasets_colors <- c(
                      "GBIF"="seagreen",
-                     "NECCA_redlist"="#B31319",
+                     "Action Plan 2019"="#B31319",
                      "E1X_MDPP_2014_2024"="#FDF79C",
+                     "DistrMap_2013_2018"="black",
                      "E1X_DB"="#2BA09F",
                      "E1X_DB_references"="#141D43",
                      "Invertebrates_records_Olga"="#F85C29"
@@ -165,18 +168,18 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
 ## pseudo-absences
 
 ## colinearity of raster data
-library(corrr)
-species_samples_art17_parnasious_num <- p_apollo_points |>
-    st_drop_geometry() |>
-    dplyr::select(where(is.numeric)) |>
-    correlate()
-
-cor_ff <- species_samples_art17_parnasious_num |>
-    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
-    filter(abs(pearson) > 0.5) |>
-    filter(term!=to_term) |>
-    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
-
+#library(corrr)
+#species_samples_art17_parnasious_num <- p_apollo_points |>
+#    st_drop_geometry() |>
+#    dplyr::select(where(is.numeric)) |>
+#    correlate()
+#
+#cor_ff <- species_samples_art17_parnasious_num |>
+#    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
+#    filter(abs(pearson) > 0.5) |>
+#    filter(term!=to_term) |>
+#    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
+#
 
 
 ############ environmental data
@@ -346,7 +349,7 @@ car_vif_drop <- function(X, thresh = 10) {
     keep
 }
 
-selected_vars <- car_vif_drop(X_cleaned, thresh = 7)
+selected_vars <- car_vif_drop(X_cleaned, thresh = 5) # keep 5 which is commonly used.
 
 # keep only the selected vars
 preds_1km <- num_stack[[selected_vars]]
@@ -440,8 +443,8 @@ bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'expl.var',
 
 # Represent response curves
 bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
-                      fixed.var = 'median')
+                      models.chosen = get_built_models(myBiomodModelOut)[c(51:55)],
+                      fixed.var = 'mean')
 bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
                       models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
                       fixed.var = 'min')
