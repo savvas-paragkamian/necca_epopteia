@@ -185,8 +185,23 @@ Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_202
            submittedName=Species,
            individualCount=as.numeric(Individuals)) |>
     mutate(datasetName = "Invertebrates_records_Olga") |>
-    mutate(basisOfRecord="MATERIAL_SAMPLE")
+    mutate(basisOfRecord="MATERIAL_SAMPLE") |>
+    bind_rows(
+    tibble(
+      submittedName   = "Cerambyx cerdo",
+      decimalLatitude = 38.077228,
+      decimalLongitude = 24.380490,
+      datasetName     = "Invertebrates_records_Olga",
+      basisOfRecord   = "MATERIAL_SAMPLE"
+    )
+  )
 
+## add a new point
+#submittedName="Cerambyx cerdo"
+#decimalLatitude="38.077228"
+#decimalLongitude="24.380490"
+#datasetName="Invertebrates_records_Olga"
+#basisOfRecord="MATERIAL_SAMPLE"
 
 ###### Unio crassus complex ###### 
 ### Integrative phylogenetic, phylogeographic and morphological characterisation of the Unio crassus species complex reveals cryptic diversity with important conservation implications

@@ -563,6 +563,14 @@ write_delim(species_samples_presence_final,
             "../results/species_samples_presence_final.tsv",
             delim="\t")
 
+################### with private data #################
+species_samples_presence_final_private <- species_samples_presence_pop |>
+    st_drop_geometry()
+
+write_delim(species_samples_presence_final_private,
+            "../results/species_samples_presence_final_private.tsv",
+            delim="\t")
+
 #----------------------------------------------------------------------------#
 #### Distribution ####
 #----------------------------------------------------------------------------#
