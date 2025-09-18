@@ -202,9 +202,9 @@ coords <- p_apollo_points |>
 
 coords_rast <- vect(apollo, geom = c("decimalLongitude", "decimalLatitude"), crs = "EPSG:4326")
 
-# -------------------------
-# 1. Load & Resample Rasters
-# -------------------------
+# ------------------------------------
+# 1. Load & Resample Numerical Rasters
+# ------------------------------------
 # the 1X1 km raster that the other rasters will be resampled on.
 gr_1km_terra <- file.path("../spatial_data/eea_reference_grid/gr_1km_terra.tif")
 gr_1km_res <- rast(gr_1km_terra)
@@ -212,10 +212,8 @@ gr_1km_res <- rast(gr_1km_terra)
 ## individual rasters to stack
 slope <- file.path("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
 dem <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
-vegetation_map <- file.path("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.tif")
-corine_gr <- file.path("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
 
-individual_rasters <- c(slope,dem,vegetation_map,corine_gr)
+individual_rasters <- c(slope,dem)
 
 individual_r <- lapply(individual_rasters, rast)
 
@@ -230,6 +228,7 @@ individual_res <- lapply(individual_rasters, function(f) {
 })
 
 individual_stack <- do.call(c,individual_res)
+
 
 ## bioclim rasters
 raster_paths_all <- list.files(path = "../spatial_data",
@@ -246,8 +245,181 @@ bio_raster_stack <- rast(bio_raster_paths)
 
 bio_raster_res <- resample(bio_raster_stack,gr_1km_res, method="bilinear")
 
+# ---------------------------------------------
+# 2. Load Classify Resample Categorical Rasters
+# ---------------------------------------------
+
+# vegetation map
+vegetation_map <- file.path("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.tif")
+
+# corine land cover in raster format
+corine_gr <- file.path("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
+
+# -------------------------------------------
+# first reclassify based on manual curation
+# according to relavant categories resolution
+# -------------------------------------------
+# clc
+corine <- as.factor(rast(corine_gr))
+
+# vegetation map
+vegetation_map_r <- rast(vegetation_map)
+
+# summary of the categorical variables
+freq_corine <- freq(corine)
+freq_vegtype <- freq(vegetation_map_r)
+
+# extract the points
+# corine
+corine_points <- terra::extract(corine,p_apollo_points)
+
+# vegetation
+veg_points <- terra::extract(vegetation_map_r,p_apollo_points) 
+
+cat_points <- corine_points |> 
+    left_join(veg_points) |>
+    count(LABEL3,A_VEG_TYPE)
+
+points_summary_veg <- veg_points |>
+    group_by(A_VEG_TYPE) |>
+    summarise(n_points=n())
+
+# label 3 corine
+points_summary_label3 <- cat_points |>
+    group_by(LABEL3) |>
+    summarise(n_points=n())
+
+# after this analysis we move to re-classification
+# of the corine raster in order to reduce categories
+# and keep the relavant ones for P. apollo
+
+# manual matrix the maps to the new categories
+rcl <- matrix(c(
+                1,1,
+                2,1,
+                3,1,
+                4,1,
+                5,1,
+                6,1,
+                7,1,
+                8,1,
+                9,1,
+               10,1,
+               11,1,
+               12,2,
+               13,2,
+               14,2,
+               15,2,
+               16,2,
+               17,2,
+               18,2,
+               19,2,
+               20,2,
+               21,2,
+               22,2,
+               23,23,
+               24,24,
+               25,25,
+               26,26,
+               27,27,
+               28,28,
+               29,29,
+               30,30,
+               31,31,
+               32,32,
+               33,33,
+               34,5,
+               35,5,
+               36,5,
+               37,5,
+               38,5,
+               39,5,
+               40,5,
+               41,5,
+               42,5,
+               43,5,
+               44,5
+), ncol=2, byrow=TRUE)
+
+# now reclassify
+corine_r <- classify(corine,rcl)
+
+# summary of the re classified corine
+corine_r_freq <- freq(corine_r)
+
+# --------------------
+# analyse the overlap of corine categories
+# per 1km cell
+
+# first resample 1km to corine, because
+# 1km has less resolution.
+gr_1km_c <- resample(gr_1km_res,corine_r,method="near") # ~5 min
+
+# compute factor relative to target resolution
+# cross tabulate to create a contingency table.
+cori_1km_stack <- c(corine_r, gr_1km_c) # stack them first
+xt <- crosstab(cori_1km_stack, long = TRUE, useNA = FALSE)  # columns: A_, B_, Freq
+
+xt_sum <- xt |>
+    group_by(CELLCODE) |>
+    summarise(cats_label3=str_c(LABEL3,collapse=","), n_cats=n(),
+              cats_cel=str_c(n,collapse=","))
+
+## function to aggregate the categorical rasters 
+## based on thresholds 
+f_aggr <- function(v, thresh = 0.6) {
+    v <- v[!is.na(v)]
+    if (length(v) == 0) return(NA)
+    tab <- table(v)
+    prop <- tab / sum(tab)
+    mx <- max(prop)
+    if (mx >= thresh) {
+      as.numeric(names(prop)[which.max(prop)])
+    } else {
+      NA
+    }
+}
+
+# for corine
+r_cat <- as.factor(corine)
+r_tmpl <- gr_1km_res
+
+fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
+fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
+#r_num <- as.numeric(r_cat) # drop the categories temp
+
+r_aggr <- terra::aggregate(r_cat,
+                    fact = c(fact_x, fact_y),
+                    fun = f_aggr,
+                    thresh = 0.6)
+
+#r_aggr <- aggregate(r_cat, fact = c(fact_x, fact_y),
+#                    fun = "modal", na.rm=TRUE)
+r_aggr_f <- as.factor(r_aggr)
+
+# then align it exactly to template grid
+corine_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
+
+# for vegetation
+r_cat <- as.factor(rast(vegetation_map))
+r_tmpl <- gr_1km_res
+
+r_num <- as.numeric(r_cat) # drop the categories temp
+fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
+fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
+
+r_aggr <- aggregate(r_num, fact = c(fact_x, fact_y),
+                    fun = "modal", na.rm=TRUE)
+r_aggr_f <- as.factor(r_aggr)
+
+
+
+# then align it exactly to template grid
+vegetation_map_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
+
+
 # all rasters stack
-stacked_rasters <- c(individual_stack,bio_raster_res)
+stacked_rasters <- c(individual_stack,bio_raster_res, corine_dom) # don't include vegetation  at this run
 
 # -------------------------
 # 2. Crop and plot rasters
@@ -365,7 +537,7 @@ myBiomodData <- BIOMOD_FormatingData(
   resp.var = rep(1, nrow(coords)),
   resp.xy = coords,
   resp.name = species_name,
-  expl.var = stack(preds_1km),
+  expl.var = preds_1km,
   PA.nb.rep = 1,
   PA.nb.absences = 1000,
   PA.strategy = 'random'
@@ -396,7 +568,72 @@ myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
                                     nb.cpu = 8,
                                     metric.eval = c('TSS','ROC'))
                                     # seed.val = 123)
-myBiomodModelOut
+
+############ toedit for ROC
+## 2) Choose a fitted model and load it
+mdl_name <- get_built_models(myBiomodModelOut)
+mdl <- BIOMOD_LoadModels(myBiomodModelOut, models = mdl_name)
+
+## 3) Get the data back (responses & predictors as a data.frame)
+resp <- get_formal_data(myBiomodData, 'resp.var')[[1]]  # 0/1 vector
+expl <- get_formal_data(myBiomodData, 'expl.var')       # data.frame of predictors
+
+## 4) Reproduce the same train/test split biomod used
+##    (pull it from the modeling output’s DataSplitTable)
+split_tab <- get_evaluations(myBiomodModelOut)
+## The table above holds metrics; for indices, use the saved split table:
+ds_tab <- myBiomodModelOut@data.split.table  # rows are runs; columns are indices (1=train, 0=test)
+test_idx <- which(ds_tab[1,] == 0)           # use RUN1 here
+
+## 5) Predict on ALL rows, then subset to the test set
+##    (use predict on the loaded model; biomod wraps different learners)
+pred_all <- predict(mdl, expl, on_0_1000=FALSE, type='response')
+
+## 6) Build presence/absence prediction vectors for dismo::evaluate
+p <- pred_all[resp == 1 & seq_along(resp) %in% test_idx]
+a <- pred_all[resp == 0 & seq_along(resp) %in% test_idx]
+
+## 7) ROC evaluation and plot
+e <- evaluate(p = p, a = a)
+plot(e, 'ROC')       # ROC curve
+auc(e)     
+
+model.comb <- 
+  expand.grid(
+    mod = dimnames(pred.val[,2]),
+    cv = dimnames(pred.val[,3]),
+    pa = dimnames(pred.val[,4]),
+    stringsAsFactors = FALSE
+  ) 
+
+## compute all the roc cuurves
+mod.roc <-
+  lapply(
+    1:nrow(model.comb),
+    function(i){
+      mod <- model.comb$mod[i]
+      cv <- model.comb$cv[i]
+      pa <- model.comb$pa[i]
+      
+      eval.lines <- !calib.lines[, paste0('_', cv), paste0('_', pa)]
+      
+      resp <- form.dat[eval.lines]
+      pred <- pred.val[eval.lines, mod, cv, pa] / 1000
+      
+      pROC::roc(resp, pred)
+      
+    }
+  )
+
+## plot roc curves
+par(mfrow = c(2,2)) 
+lapply(mod.roc, plot)
+
+
+
+
+
+############ END toedit for ROC
 
 # Get evaluation scores & variables importance
 get_evaluations(myBiomodModelOut)
@@ -442,9 +679,13 @@ bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('expl.var', 'algo',
 bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'expl.var', 'run'))
 
 # Represent response curves
+## all runs
+
 bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
                       models.chosen = get_built_models(myBiomodModelOut)[c(51:55)],
                       fixed.var = 'mean')
+
+
 bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
                       models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
                       fixed.var = 'min')
