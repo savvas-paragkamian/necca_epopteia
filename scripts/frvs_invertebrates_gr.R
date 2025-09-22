@@ -22,16 +22,13 @@ library(units)
 source("necca_spatial_functions.R")
 
 ############################# Load Spatial Data ########################
-wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
-greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
-#hellenic_borders_shp <- sf::st_read("../spatial_data/hellenic_borders/hellenic_borders.shp")
+greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp") |>
+    st_transform(crs="EPSG:3035")
 
-gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") |>
-    st_transform(., crs="WGS84")
+gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") 
 
-gr_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp") |>
-    st_transform(., crs="WGS84")
+gr_10km <- sf::st_read("../spatial_data/eea_reference_grid/gr_10km.shp") 
 
 N2000_v32 <- sf::st_read("../spatial_data/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp")
 
@@ -47,15 +44,13 @@ iucn_art17_invert_all <- read_delim("../results/iucn_art17_invert_all.tsv", deli
 iucn_art17_invert_no_tax <- iucn_art17_invert_all |>
     dplyr::select(-ends_with("Name"),submittedName)
 
-species_dist_national_rep <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution.shp")
-species_dist_national_rep_sens <- sf::st_read("../spatial_data/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp")
-
 ########################## Flowchart for FRVs ##########################
 # keep only one species name from the synonyms
 species_info <- species_samples_art17 |>
     distinct(submittedName) |> 
     left_join(species_taxonomy, by=c("submittedName"="verbatim_name")) |>
     left_join(iucn_art17_invert_no_tax, by=c("submittedName"="submittedName"))
+
 # species spatial 
 species_art17_spatial <- species_samples_art17 |>
     left_join(species_info) |>
@@ -66,12 +61,14 @@ species_art17_spatial <- species_samples_art17 |>
 
 ########################## Parnassius apollo ###########################
 
-parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp") |>
-    st_transform(crs="WGS84")
+parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp") 
 
-p_apollo_points <- species_art17_spatial |>
+p_apollo_points_wgs <- species_art17_spatial |>
     filter(species=="Parnassius apollo") |>
     filter(includeDistribution==TRUE)
+
+p_apollo_points <- p_apollo_points_wgs |>
+    st_transform(3035)
 
 apollo_mean <- p_apollo_points |>
     summarise(
@@ -82,13 +79,6 @@ apollo_mean <- p_apollo_points |>
     )
 
 write_delim(apollo_mean,"../results/apollo_mean.tsv", delim="\t")
-
-## data preparation
-apollo <- p_apollo_points |>
-    st_drop_geometry() |>
-    dplyr::select(decimalLatitude,decimalLongitude)
-
-points_convex <- st_convex_hull(st_union(p_apollo_points))
 
 ### hotspot
 locations_10_grid_samples <- st_join(gr_10km, p_apollo_points, left=F) |>
@@ -115,7 +105,7 @@ natura_colors <- c(
 
 hotspot_apollo_map <- ggplot()+
     geom_sf(greece_regions, mapping=aes()) +
-    geom_sf(N2000_v32_wgs, mapping=aes(fill=SITETYPE),
+    geom_sf(N2000_v32, mapping=aes(fill=SITETYPE),
             alpha=0.8,
             #colour="transparent",
             na.rm = F,
@@ -164,71 +154,44 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
        units="cm",
        device="png")
 
-############## Modeling FRV ##################
-## pseudo-absences
-
-## colinearity of raster data
-#library(corrr)
-#species_samples_art17_parnasious_num <- p_apollo_points |>
-#    st_drop_geometry() |>
-#    dplyr::select(where(is.numeric)) |>
-#    correlate()
-#
-#cor_ff <- species_samples_art17_parnasious_num |>
-#    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
-#    filter(abs(pearson) > 0.5) |>
-#    filter(term!=to_term) |>
-#    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
-#
-
-
-############ environmental data
-# add the hottest period, maybe important
-# add the habitat categories which are more coarce in the categories. They are only in Natura2000
-# or join some vegetation categories into one to reduce their abundance.
-# or corine raster file
-## add NDVI ? mean? which years? prioritize based on time availability
-## raster paths
-
+# --------------------------------------------------------- #
+###################### Modeling FRV ########################
+# --------------------------------------------------------- #
 
 # -------------------------
 # 0. Species Data P. apollo
 # -------------------------
 species_name <- unique(p_apollo_points$submittedName)
 
-coords <- p_apollo_points |>
-    st_drop_geometry() |> 
-    dplyr::select(decimalLongitude,decimalLatitude) 
+## data preparation
+points_convex <- st_convex_hull(st_union(p_apollo_points))
 
-coords_rast <- vect(apollo, geom = c("decimalLongitude", "decimalLatitude"), crs = "EPSG:4326")
+coords <- st_coordinates(p_apollo_points)
+
+# ---------
+# convex hull
+# __________
+# hull for crop in order to 
+# reduce the area
+hull_vect <- vect(points_convex)
 
 # ------------------------------------
 # 1. Load & Resample Numerical Rasters
 # ------------------------------------
-# the 1X1 km raster that the other rasters will be resampled on.
-gr_1km_terra <- file.path("../spatial_data/eea_reference_grid/gr_1km_terra.tif")
-gr_1km_res <- rast(gr_1km_terra)
 
 ## individual rasters to stack
-slope <- file.path("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
-dem <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif")
+slope_f <- file.path("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
+dem_f <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_europe.tif")
+
+# slope load
+slope <- rast(slope_f)
+# dem load
+dem_w <- rast(dem_f)
+
+# it is in wgs84
+dem <- project(dem_w, slope) # transform to LAEA Europe
 
 individual_rasters <- c(slope,dem)
-
-individual_r <- lapply(individual_rasters, rast)
-
-# the extends are different so resample is needed
-lapply(individual_r, ext)
-
-# Resample to match rows, columns, extent, and resolution
-individual_res <- lapply(individual_rasters, function(f) {
-                     r <- rast(f)
-                     r_proj <- project(r, gr_1km_res)         # reproject if CRS differs
-                     resample(r_proj, gr_1km_res, method="bilinear")  # or method="near" for categorical
-})
-
-individual_stack <- do.call(c,individual_res)
-
 
 ## bioclim rasters
 raster_paths_all <- list.files(path = "../spatial_data",
@@ -240,49 +203,55 @@ raster_paths_all <- list.files(path = "../spatial_data",
 # keep only bioclimatic
 bio_raster_paths <- raster_paths_all[grep("bio_",raster_paths_all,invert=F)] 
 
-## load rasters to stack
-bio_raster_stack <- rast(bio_raster_paths)
+## load rasters to stack which are in WGS84
+bio_raster_stack_w <- rast(bio_raster_paths)
 
-bio_raster_res <- resample(bio_raster_stack,gr_1km_res, method="bilinear")
+# change the projection to "EPSG:3035"
+bio_raster_stack <- project(bio_raster_stack_w, "EPSG:3035")
+
+#bio_raster_stack <- project(bio_raster_stack_w, gr_1km_res)
+
+#bio_raster_res <- resample(bio_raster_stack,gr_1km_res, method="bilinear")
 
 # ---------------------------------------------
-# 2. Load Classify Resample Categorical Rasters
+# 2. Load Classify Categorical Rasters
 # ---------------------------------------------
 
-# vegetation map
-vegetation_map <- file.path("../spatial_data/Vegetation_map_Greece/D_xabxg_VPG_60-98_GEO.tif")
+
+#gr_1km_res <- rast("../spatial_data/eea_reference_grid/EEA_grid_id_1km.tif")
 
 # corine land cover in raster format
-corine_gr <- file.path("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
+corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
 
 # -------------------------------------------
 # first reclassify based on manual curation
 # according to relavant categories resolution
 # -------------------------------------------
 # clc
-corine <- as.factor(rast(corine_gr))
+corine <- as.factor(corine_gr)
 
 # vegetation map
-vegetation_map_r <- rast(vegetation_map)
+#vegetation_map_r <- rast(vegetation_map)
 
 # summary of the categorical variables
-freq_corine <- freq(corine)
-freq_vegtype <- freq(vegetation_map_r)
+freq_corine <- freq(corine_gr)
+
+#freq_vegtype <- freq(vegetation_map_r)
 
 # extract the points
 # corine
-corine_points <- terra::extract(corine,p_apollo_points)
+corine_points <- terra::extract(corine_gr,p_apollo_points)
 
 # vegetation
-veg_points <- terra::extract(vegetation_map_r,p_apollo_points) 
+#veg_points <- terra::extract(vegetation_map_r,p_apollo_points) 
 
 cat_points <- corine_points |> 
-    left_join(veg_points) |>
-    count(LABEL3,A_VEG_TYPE)
+#    left_join(veg_points) |>
+    count(LABEL3)
 
-points_summary_veg <- veg_points |>
-    group_by(A_VEG_TYPE) |>
-    summarise(n_points=n())
+#points_summary_veg <- veg_points |>
+#    group_by(A_VEG_TYPE) |>
+#    summarise(n_points=n())
 
 # label 3 corine
 points_summary_label3 <- cat_points |>
@@ -338,112 +307,241 @@ rcl <- matrix(c(
                41,5,
                42,5,
                43,5,
-               44,5
+               44,NA
 ), ncol=2, byrow=TRUE)
 
 # now reclassify
 corine_r <- classify(corine,rcl)
 
+#values(corine_r)[values() < 0] = NA
+
 # summary of the re classified corine
 corine_r_freq <- freq(corine_r)
+
+
+
+# ---------------------------------------------
+# 3. Crop and resample Rasters to 1X1 km Res
+# ---------------------------------------------
+
+# -----------------
+# bounding box 
+# using the template of gr 1km reference grid
+# to create a raster to use in the models
+# -----------------
+
+shp <- gr_1km
+
+xmin = 5205000
+xmax = 5565000
+ymin = 1725000
+ymax = 2185000
+
+bb <- st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = st_crs(shp))
+
+# find the intersecting polygons
+sel <- st_intersects(shp, st_as_sfc(bb), sparse = FALSE)[,1]
+
+# geometries remain intact
+shp_bbox <- shp[sel, ]
+
+# create a polygon to use as mask with an extent
+# and havind the overlap with the 1km EEA reference grid
+e <- terra::ext(xmin, xmax, ymin, ymax)
+
+p <- terra::as.polygons(e, crs="EPSG:3035")
+
+#bbox_0 <- terra::crop(p, terra::ext(shp))
+bbox <- terra::crop(p, e)
+
+# the 1X1 km raster that the other rasters will be resampled on.
+#bbox_grid <- terra::rasterize(bbox,
+#                              terra::rast(terra::ext(shp),
+#                                                    resolution = 1000)) # 1km res
+bbox_grid <- terra::rasterize(bbox,terra::rast(e,resolution = 1000)) # 1km res
+
+# assign the CRS manually
+crs(bbox_grid) <- "EPSG:3035"
+
+#coun.rast_e <- crop(coun.rast,e)
+
+# export to validate in gis GUI apps
+writeRaster(bbox_grid, "../spatial_data/eea_reference_grid/bbox_grid.tif", overwrite = TRUE)
+
+writeVector(coun.crop, "../spatial_data/eea_reference_grid/coun_crop.shp", overwrite = TRUE)
+
+# -----------------
+## Crop and resample
+## each raster using the coun.rast
+# -----------------
+
+bio_c <- crop(bio_raster_stack, bbox_grid)
+
+bio_raster_stack_r <- resample(bio_raster_stack, bbox_grid, method="average", threads=TRUE)
+
+dem_c <- crop(dem, bbox_grid)
+
+dem_r <- resample(dem_c, bbox_grid, method="average", threads=TRUE)
+
+writeRaster(dem_c, "../results/dem_c.tif", overwrite = TRUE)
+writeRaster(dem_r, "../results/dem_r.tif", overwrite = TRUE)
+
+slope_c <- crop(slope, bbox_grid)
+
+slope_r <- resample(slope_c, bbox_grid, method="average", threads=TRUE)
+writeRaster(slope_r, "../results/slope_r.tif", overwrite = TRUE)
+
+stacked_rasters_n <- c(bio_raster_stack_r, dem_r, slope_r)
+
+# Corine
+## crop doesn\'t work with factor rasters. 
+## so i use the coun.crop
+corine_rc <- crop(corine_r,bbox_grid)
+
+writeRaster(corine_rc, "../spatial_data/corine_rc_crop.tif", overwrite = TRUE)
+
+#corine_rcr <- resample(corine_rc, bbox_grid, method="mode", threads=TRUE)
+
+#corine_rcr_m <- resample(corine_rc, bbox_grid, method="max", threads=TRUE)
+
+#writeRaster(corine_rcr, "../spatial_data/corine_rct_mode.tif", overwrite = TRUE)
+
+#writeRaster(corine_rcr_m, "../spatial_data/corine_rct_max.tif", overwrite = TRUE)
 
 # --------------------
 # analyse the overlap of corine categories
 # per 1km cell
+# -------------------
 
-# first resample 1km to corine, because
-# 1km has less resolution.
-gr_1km_c <- resample(gr_1km_res,corine_r,method="near") # ~5 min
+library(exactextractr)
 
-# compute factor relative to target resolution
+# assign values to raster 
+x <- setValues(bbox_grid, 1:ncell(bbox_grid))
+
+# make vector
+bbox_grid_s <- terra::as.polygons(x)
+
+bbox_grid_sf <- sf::st_as_sf(bbox_grid_s)
+
+st_write(bbox_grid_sf, "../results/bbox_grid_sf.shp")
+
+#extract_count = exact_extract(corine_rc,bbox_grid_sf,fun="count")
+
+#write_delim(extract_count, "../results/extract_count.tsv", delim="\t")
+
+extract_frac = exact_extract(corine_rc,bbox_grid_sf,fun="frac")
+
+extract_frac_t <- as_tibble(extract_frac) |>
+    rownames_to_column()
+
+write_delim(extract_frac_t, "../results/extract_frac.tsv", delim="\t")
+
+extract_frac_l <- extract_frac_t |>
+    pivot_longer(-rowname,names_to="categories", values_to="frac")
+
+extract_frac_dom <- extract_frac_l |>
+    group_by(rowname) |>
+    mutate(sum=sum(frac), max=max(frac)) |>
+    #mutate(dominant = if_else( sum==0,200, if_else(max>0.5,max,-1))) |>
+    mutate(cat = if_else( sum==0,"zero", if_else(max>0.5,frac,"mixed"))) |>
+    ungroup() |>
+    mutate(class=if_else(dominant==200,"zero",if_else(dominant==-1,"mixed","dominant"))) 
+
+
+
+extract_frac_dom_a <- extract_frac_dom |>
+    mutate(dom_cat= if_else(class=="dominant" & max==frac, categories)) |>
+
+
+    mutate(dom_value=if_else(class=="dominant" & max==frac, frac, -1))
+
+extract_frac_dom_dist <- extract_frac_dom |>
+    distinct(rowname,sum,dominant,class,dom_cat)
+
+extract_frac_dom_sum <- extract_frac_dom |>
+    distinct(rowname,dominant,class) |> 
+    group_by(class) |>
+    summarise(n=n())
+
+extract_frac_dom_s <- extract_frac_t |>
+    left_join(extract_frac_dom_dist)
+
+
+extract_frac_dom_w <- extract_frac_dom |>
+    dplyr::select(-c(class,sum,maxextract_frac_dom_w)) |>
+    pivot_wider(id_cols=rowname, names_from=categories,values_from=dominant)
+
+# class, 
+# μεγαλύτερο από 0,5 είναι το dominant, και κράτα την τιμή του frac, 
+# αν δεν είναι μεγαλύτερο τότε έλεγξε αν ισχύει ότι sum==0, δηλαδή
+# το κελί αυτό δεν έχει καμία τιμή στις κατηγορίες corine, και απόδοσε την τιμή 200.
+# Στις υπόλοιπες περιπτώσεις βάλε -1
+#|>
+#    mutate(class2 = if_else(frac > 0.5,"dom",if_else(frac <= 0.5 & sum==0,"zero","mixed")))
+
+
+
+
+extract_frac_dom_w <- extract_frac_dom |>
+    dplyr::select(-frac) |>
+    pivot_wider(names_from=categories,values_from=dominant)
+
+
+#x <- rast(xmin=0, xmax=2400, ymin=0, ymax=2400, res=240)
+
+# Per-pixel area (correct in lon/lat too) based on corine resolution
+corine_rcell <- cellSize(corine_rc, unit = "m")
+
 # cross tabulate to create a contingency table.
-cori_1km_stack <- c(corine_r, gr_1km_c) # stack them first
-xt <- crosstab(cori_1km_stack, long = TRUE, useNA = FALSE)  # columns: A_, B_, Freq
+# doen't work well for different resolutions of cells.
 
-xt_sum <- xt |>
-    group_by(CELLCODE) |>
-    summarise(cats_label3=str_c(LABEL3,collapse=","), n_cats=n(),
-              cats_cel=str_c(n,collapse=","))
+cori_1km_stack <- c(corine_rc, bbox_grid) # stack them first
 
-## function to aggregate the categorical rasters 
-## based on thresholds 
-f_aggr <- function(v, thresh = 0.6) {
-    v <- v[!is.na(v)]
-    if (length(v) == 0) return(NA)
-    tab <- table(v)
-    prop <- tab / sum(tab)
-    mx <- max(prop)
-    if (mx >= thresh) {
-      as.numeric(names(prop)[which.max(prop)])
-    } else {
-      NA
-    }
-}
+#xt <- crosstab(cori_1km_stack, long = TRUE, useNA = FALSE)  # columns: A_, B_, Freq
 
-# for corine
-r_cat <- as.factor(corine)
-r_tmpl <- gr_1km_res
+#write_delim(xt, "xt.tsv",delim="\t")
 
-fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
-fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
-#r_num <- as.numeric(r_cat) # drop the categories temp
+#xt_dom <- xt |>
+#    mutate(percent = n/100) |>
+#    group_by(CELLCODE) |>
+#    filter(percent==max(percent))
+    
 
-r_aggr <- terra::aggregate(r_cat,
-                    fact = c(fact_x, fact_y),
-                    fun = f_aggr,
-                    thresh = 0.6)
+#xt_sum <- xt |>
+#    group_by(CELLCODE) |>
+#    summarise(cats_label3=str_c(LABEL3,collapse=","), 
+#              sum_n=sum(n),
+#              n_cats=n(),
+#              cats_cel=str_c(n,collapse=","))
 
-#r_aggr <- aggregate(r_cat, fact = c(fact_x, fact_y),
-#                    fun = "modal", na.rm=TRUE)
-r_aggr_f <- as.factor(r_aggr)
-
-# then align it exactly to template grid
-corine_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
-
-# for vegetation
-r_cat <- as.factor(rast(vegetation_map))
-r_tmpl <- gr_1km_res
-
-r_num <- as.numeric(r_cat) # drop the categories temp
-fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
-fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
-
-r_aggr <- aggregate(r_num, fact = c(fact_x, fact_y),
-                    fun = "modal", na.rm=TRUE)
-r_aggr_f <- as.factor(r_aggr)
-
-
-
-# then align it exactly to template grid
-vegetation_map_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
-
-
-# all rasters stack
-stacked_rasters <- c(individual_stack,bio_raster_res, corine_dom) # don't include vegetation  at this run
 
 # -------------------------
-# 2. Crop and plot rasters
+# plot rasters
 # -------------------------
-# hull for crop in order to 
-# reduce the area
-hull_vect <- vect(points_convex)
 
 # Crop each raster using the hull
 env_stack <- crop(stacked_rasters,ext(hull_vect))
 
-## plot
-png("../figures/stacked_raster_with_points.png", width = 3000, height = 3000, units="px")
-plot(env_stack)
-dev.off()
+num_stack <- stacked_rasters_n
+
+
+## plot 
+#png("../figures/stacked_raster_with_points.png",
+#    width = 5000,
+#    height = 10000,
+#    res=300,
+#    units="px")
+#plot(env_stack, nr=6, nc=4)
+#dev.off()
 
 # Keep only numeric layers
 # Remove by name
-num_stack <- env_stack[[!names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
+#num_stack <- env_stack[[!names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
 # Keep only categorical layers
 cat_stack <- env_stack[[names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
 
 # -------------------------
-# 2. VIF Filtering (car)
+# 4. VIF Filtering (car)
 # -------------------------
 # Sample random background points for VIF evaluation
 set.seed(1)
@@ -464,13 +562,13 @@ X <- X[, is_num, drop = FALSE]
 # function to find highly correlated variables and exclude them
 
 find_highly_correlated <- function(cor_mat, cutoff = 0.99) {
-
     cor_mat[lower.tri(cor_mat, diag = TRUE)] <- 0  # keep only upper triangle
     high_corr <- which(abs(cor_mat) > cutoff, arr.ind = TRUE)
     if (nrow(high_corr) == 0) return(integer(0))  # nothing to remove
     vars_to_remove <- unique(rownames(high_corr))  # choose to drop first of each pair
     which(colnames(cor_mat) %in% vars_to_remove)
 }
+
 # correlation
 cors <- cor(X, use = "pairwise.complete.obs")
 cors_mat <- cors
@@ -501,10 +599,19 @@ ggsave("../figures/vif_correlation_matrix.png",
        device="png")
 
 # exclude the variables that have high correlation
-high_cor_indices <- find_highly_correlated(cors_mat, cutoff = 0.88)
+high_cor_indices <- find_highly_correlated(cors_mat, cutoff = 0.7)
+
+keep <- c("eudem_dem_4258_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_3",
+          "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14")
 
 # Drop them
-X_cleaned <- X[, -high_cor_indices]
+X_cleaned <- X[, keep]
 
 # Helper function for VIF filtering
 car_vif_drop <- function(X, thresh = 10) {
@@ -531,7 +638,7 @@ preds_1km <- num_stack[[selected_vars]]
 preds_1km <- c(preds_1km,cat_stack)
 
 # -------------------------
-# 3. Format Data for biomod2
+# 5. Format Data for biomod2
 # -------------------------
 myBiomodData <- BIOMOD_FormatingData(
   resp.var = rep(1, nrow(coords)),
@@ -544,7 +651,7 @@ myBiomodData <- BIOMOD_FormatingData(
 )
 
 # -------------------------
-# 4. Run Single Models
+# 6. Run Single Models
 # -------------------------
 
 ## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
@@ -713,7 +820,7 @@ proj_rast <- get_predictions(myBiomodProj)
 ## Response curves
 ## ROC curves
 # -------------------------
-# 5. Run Ensemble Models
+# 6. Run Ensemble Models
 # -------------------------
 # Model ensemble models
 myBiomodEM <- BIOMOD_EnsembleModeling(bm.mod = myBiomodModelOut,
@@ -926,3 +1033,124 @@ dev.off()
 
 ## Model evaluation
 
+
+
+
+# ------------------------------------
+# Appendix
+# ------------------------------------
+
+# ------------------------------------
+# Code graveyard
+# ------------------------------------
+
+## pseudo-absences
+
+## colinearity of raster data
+#library(corrr)
+#species_samples_art17_parnasious_num <- p_apollo_points |>
+#    st_drop_geometry() |>
+#    dplyr::select(where(is.numeric)) |>
+#    correlate()
+#
+#cor_ff <- species_samples_art17_parnasious_num |>
+#    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
+#    filter(abs(pearson) > 0.5) |>
+#    filter(term!=to_term) |>
+#    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
+#
+
+
+############ environmental data
+# add the hottest period, maybe important
+# add the habitat categories which are more coarce in the categories. They are only in Natura2000
+# or join some vegetation categories into one to reduce their abundance.
+# or corine raster file
+## add NDVI ? mean? which years? prioritize based on time availability
+## raster paths
+
+
+#individual_r <- lapply(individual_rasters, rast)
+#
+## the extends are different so resample is needed
+#lapply(individual_r, ext)
+#
+## Resample to match rows, columns, extent, and resolution
+#individual_res <- lapply(individual_rasters, function(f) {
+#                     r <- rast(f)
+#                     r_proj <- project(r, gr_1km_res)         # reproject if CRS differs
+#                     resample(r_proj, gr_1km_res, method="bilinear")  # or method="near" for categorical
+#})
+#individual_stack <-c(slope,dem)
+
+
+
+## function to aggregate the categorical rasters 
+## based on thresholds 
+#f_aggr <- function(v, thresh = 0.6) {
+#    v <- v[!is.na(v)]
+#    if (length(v) == 0) return(NA)
+#    tab <- table(v)
+#    prop <- tab / sum(tab)
+#    mx <- max(prop)
+#    if (mx >= thresh) {
+#      as.numeric(names(prop)[which.max(prop)])
+#    } else {
+#      100
+#    }
+#}
+
+## for corine
+#r_cat <- as.factor(corine_r)
+#r_tmpl <- gr_1km_res
+#
+#fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
+#fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
+##r_num <- as.numeric(r_cat) # drop the categories temp
+#
+#r_aggr <- terra::aggregate(r_cat,
+#                    fact = c(fact_x, fact_y),
+#                    fun = f_aggr,
+#                    thresh = 0.4)
+#
+#r_aggr <- aggregate(r_cat, fact = c(fact_x, fact_y),
+#                    fun = "modal", na.rm=TRUE)
+#r_aggr_f <- as.factor(r_aggr)
+
+# then align it exactly to template grid
+#corine_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
+#freq(corine_dom)
+#plot(corine_dom)
+
+# for vegetation
+#r_cat <- as.factor(rast(vegetation_map))
+#r_tmpl <- gr_1km_res
+#
+#r_num <- as.numeric(r_cat) # drop the categories temp
+#fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
+#fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
+#
+#r_aggr <- aggregate(r_num, fact = c(fact_x, fact_y),
+#                    fun = "modal", na.rm=TRUE)
+#r_aggr_f <- as.factor(r_aggr)
+#
+#
+#
+## then align it exactly to template grid
+#vegetation_map_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
+
+
+# don't include vegetation  at this run
+
+# first resample 1km to corine, because
+# 1km has less resolution.
+#gr_1km_c <- resample(gr_1km_h,corine_rh,method="near") # ~5 min
+
+#writeRaster(corine_rh, "corine_rh.tif", overwrite=TRUE)
+
+#writeRaster(gr_1km_c, "gr_1km_c.tif", overwrite=TRUE)
+# compute factor relative to target resolution
+# Restrict to overlap for computations
+#E <- intersect(ext(corine_rh), ext(gr_1km_c))
+#corine_rE  <- crop(corine_rh, E)
+#grid_id <- crop(gr_1km_c, E)
