@@ -28,6 +28,9 @@ greece_regions_vec <- vect(greece_regions)
 greece_regions_bbox <- st_bbox(greece_regions) |> st_as_sfc()
 greece_regions_bbox_sf <- st_sf(geometry = greece_regions_bbox, crs = st_crs(greece_regions))
 
+
+greece_regions_bbox_LAEA <- greece_regions_bbox_sf |> 
+    st_transform(3035)
 ########################## species information ##############################
 # the species of the previous epopteia 2015
 
@@ -327,11 +330,24 @@ for (f in hilda_directory_files) {
     }
 }
 
+### to delete
+gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") 
+
+#greece_bbox_LAEA <- st_bbox(gr_1km) |> st_as_sfc()
+
 ### corine land cover raster 100m
 corine_file <- "/Users/talos/Documents/spatial_data/u2018_clc2018_v2020_20u1_raster100m/DATA/U2018_CLC2018_V2020_20u1.tif"
 corine_gr_d <- "../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/"
+
+corine_europe <- rast(corine_file)
 # crop
-crop_raster_by_shp(corine_file,greece_regions_bbox_sf,corine_gr_d)
+#crop_raster_by_shp(corine_file,greece_regions_bbox_LAEA,corine_gr_d)
+
+corine_gr <- crop(corine_europe,greece_regions_bbox_LAEA)
+
+#gr_1km_terra <- mask(gr_1km_c, greece_regions_bbox_sf)
+
+writeRaster(corine_gr, "../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif",overwrite=TRUE)
 
 corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U2018_CLC2018_V2020_20u1.tif")
 
@@ -340,25 +356,31 @@ corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U
 # crop the eu dem file, it is 20gb.
 eu_dem_file <- "/Users/talos/Documents/spatial_data/EU_DEM_mosaic_5deg/eudem_dem_4258_europe.tif"
 eurodem_gr_d <- "../spatial_data/EU_DEM_mosaic_5deg_gr/"
+
 crop_raster_by_shp(eu_dem_file,greece_regions_bbox_sf,eurodem_gr_d)
+
 
 # Then reload in different name and change crs
 eu_dem <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_gr.tif")
 
 eu_dem_wgs84 <- terra::project(eu_dem, "EPSG:4326")
 
-terra::writeRaster(eu_dem_wgs84,
-                   "../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.tif",
-                   overwrite=TRUE)
 
 #### EU dem slope
 eu_dem_slope_file <- "/Users/talos/Documents/spatial_data/EUD_CP_SLOP_mosaic/eudem_slop_3035_europe.tif"
 
 eu_dem_slope_gr_d <- "../spatial_data/EU_DEM_slope_gr/"
-crop_raster_by_shp(eu_dem_slope_file,greece_regions_bbox_sf,eu_dem_slope_gr_d)
+
+eu_dem_slope_e <- rast(eu_dem_slope_file)
+
+eu_slope_gr <- crop(corine_europe,greece_regions_bbox_LAEA)
+
+terra::writeRaster(eu_slope_gr,
+                   "../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif",
+                   overwrite=TRUE)
+#crop_raster_by_shp(eu_dem_slope_file,greece_regions_bbox_sf,eu_dem_slope_gr_d)
 
 # Then reload in different name and change crs
-eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
 # the conversion happened succesfully in the function
 #eu_dem_slope_wgs84 <- terra::project(eu_dem_slope, "EPSG:4326")
 
@@ -380,11 +402,38 @@ crop_raster_by_shp(ecosystem_types,greece_regions_bbox_sf,ecosystem_types_gr_d)
 #load
 gr_1km <- sf::st_read("../spatial_data/eea_reference_grid/gr_1km.shp") 
 
+grid_sf <- gr_1km
+
+# 2) Make/ensure a unique cell ID (character or integer)
+#if (!"CELLCODE" %in% names(grid_sf)) {
+#  grid_sf$cell_id <- seq_len(nrow(grid_sf))
+#  grid_v <- vect(grid_sf)
+#}
+
+# 3) Build a raster template aligned to the grid
+#    Set resolution to 1000 for 1-km grid (or 10000 for 10-km)
+r_ <- rast(grid_sf)         # use 10000 for 10 km
+
+r_tmpl <- rast(grid_v, res = 1000)         # use 10000 for 10 km
+
+origin(r_tmpl) <- c(0, 0)                  # snap to EEA grid origin
+values(r_tmpl) <- NA
+crs(r_tmpl) <- crs(grid_v)
+
+# 4) Rasterize the grid polygons to cell IDs (categorical raster)
+r_id <- rasterize(grid_v, r_tmpl, field = "CELLCODE")
+
+
+# Save
+writeRaster(r_tmpl, "../spatial_data/eea_reference_grid/EEA_grid_id_1km.tif", overwrite = TRUE, datatype = "INT4S")
+
 # rasterize
 polygon_sf <- gr_1km 
 
 raster_template <- rast(ext = ext(polygon_sf), resolution = 1000)  # 1000 meters = 1 km resolution
+
 raster_object <- rasterize(polygon_sf, raster_template, field = "CELLCODE", background = NA)
+
 gr_1km_rast <- raster_object
 crs(gr_1km_rast) <- "EPSG:3035"
 writeRaster(raster_object, "../spatial_data/eea_reference_grid/gr_1km.tif",overwrite=TRUE)
