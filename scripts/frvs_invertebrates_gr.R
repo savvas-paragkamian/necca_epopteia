@@ -65,7 +65,9 @@ parnassius_dist <- sf::st_read("../data/Parnassius apollo AP 2019/AP_Papollo_Dis
 
 p_apollo_points_wgs <- species_art17_spatial |>
     filter(species=="Parnassius apollo") |>
-    filter(includeDistribution==TRUE)
+    filter(includeDistribution==TRUE | datasetName=="GBIF") |>
+    filter(datasetName!="Action Plan 2019")
+    #filter(!c(datasetName %in% c("Action Plan 2019", "DistrMap_2013_2018")))
 
 p_apollo_points <- p_apollo_points_wgs |>
     st_transform(3035)
@@ -110,7 +112,7 @@ hotspot_apollo_map <- ggplot()+
             #colour="transparent",
             na.rm = F,
             show.legend=T) +
-    geom_sf(points_convex, mapping=aes(color="gray70"), fill="NA")+
+#    geom_sf(points_convex, mapping=aes(color="gray70"), fill="NA")+
     scale_fill_manual(
                       values= natura_colors,
                        guide = guide_legend(position = "inside",
@@ -181,15 +183,12 @@ hull_vect <- vect(points_convex)
 
 ## individual rasters to stack
 slope_f <- file.path("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
-dem_f <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_europe.tif")
+dem_f <- file.path("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif")
 
 # slope load
 slope <- rast(slope_f)
 # dem load
-dem_w <- rast(dem_f)
-
-# it is in wgs84
-dem <- project(dem_w, slope) # transform to LAEA Europe
+dem <- rast(dem_f)
 
 individual_rasters <- c(slope,dem)
 
@@ -254,7 +253,7 @@ cat_points <- corine_points |>
 #    summarise(n_points=n())
 
 # label 3 corine
-points_summary_label3 <- cat_points |>
+points_summary_label3 <- corine_points |>
     group_by(LABEL3) |>
     summarise(n_points=n())
 
@@ -318,8 +317,6 @@ corine_r <- classify(corine,rcl)
 # summary of the re classified corine
 corine_r_freq <- freq(corine_r)
 
-
-
 # ---------------------------------------------
 # 3. Crop and resample Rasters to 1X1 km Res
 # ---------------------------------------------
@@ -330,8 +327,10 @@ corine_r_freq <- freq(corine_r)
 # to create a raster to use in the models
 # -----------------
 
+# load the grid 1km 
 shp <- gr_1km
 
+# manual bbox of the area of interest
 xmin = 5205000
 xmax = 5565000
 ymin = 1725000
@@ -355,20 +354,13 @@ p <- terra::as.polygons(e, crs="EPSG:3035")
 bbox <- terra::crop(p, e)
 
 # the 1X1 km raster that the other rasters will be resampled on.
-#bbox_grid <- terra::rasterize(bbox,
-#                              terra::rast(terra::ext(shp),
-#                                                    resolution = 1000)) # 1km res
 bbox_grid <- terra::rasterize(bbox,terra::rast(e,resolution = 1000)) # 1km res
 
 # assign the CRS manually
 crs(bbox_grid) <- "EPSG:3035"
 
-#coun.rast_e <- crop(coun.rast,e)
-
 # export to validate in gis GUI apps
-writeRaster(bbox_grid, "../spatial_data/eea_reference_grid/bbox_grid.tif", overwrite = TRUE)
-
-writeVector(coun.crop, "../spatial_data/eea_reference_grid/coun_crop.shp", overwrite = TRUE)
+writeRaster(bbox_grid, "../results/p_apollo/geospatial/bbox_grid.tif", overwrite = TRUE)
 
 # -----------------
 ## Crop and resample
@@ -383,13 +375,13 @@ dem_c <- crop(dem, bbox_grid)
 
 dem_r <- resample(dem_c, bbox_grid, method="average", threads=TRUE)
 
-writeRaster(dem_c, "../results/dem_c.tif", overwrite = TRUE)
-writeRaster(dem_r, "../results/dem_r.tif", overwrite = TRUE)
+writeRaster(dem_c, "../results/p_apollo/geospatial/dem_c.tif", overwrite = TRUE)
+writeRaster(dem_r, "../results/p_apollo/geospatial/dem_r.tif", overwrite = TRUE)
 
 slope_c <- crop(slope, bbox_grid)
 
 slope_r <- resample(slope_c, bbox_grid, method="average", threads=TRUE)
-writeRaster(slope_r, "../results/slope_r.tif", overwrite = TRUE)
+writeRaster(slope_r, "../results/p_apollo/geospatial/slope_r.tif", overwrite = TRUE)
 
 stacked_rasters_n <- c(bio_raster_stack_r, dem_r, slope_r)
 
@@ -398,7 +390,7 @@ stacked_rasters_n <- c(bio_raster_stack_r, dem_r, slope_r)
 ## so i use the coun.crop
 corine_rc <- crop(corine_r,bbox_grid)
 
-writeRaster(corine_rc, "../spatial_data/corine_rc_crop.tif", overwrite = TRUE)
+writeRaster(corine_rc, "../results/p_apollo/geospatial/corine_rc_crop.tif", overwrite = TRUE)
 
 #corine_rcr <- resample(corine_rc, bbox_grid, method="mode", threads=TRUE)
 
@@ -423,97 +415,74 @@ bbox_grid_s <- terra::as.polygons(x)
 
 bbox_grid_sf <- sf::st_as_sf(bbox_grid_s)
 
-st_write(bbox_grid_sf, "../results/bbox_grid_sf.shp")
+st_write(bbox_grid_sf, "../results/p_apollo/geospatial/bbox_grid_sf.shp",append=TRUE)
 
-#extract_count = exact_extract(corine_rc,bbox_grid_sf,fun="count")
+# extract the grid ids that the p apollo has points
+p_apollo_bbox <- terra::extract(x,p_apollo_points) 
+
+p_apollo_corine <- terra::extract(corine_rc, p_apollo_points)
+
+p_apollo_spatial <- p_apollo_bbox |> left_join(p_apollo_corine) |>
+    mutate(layer=as.character(layer)) |>
+    group_by(layer) |>
+    summarise(p_apollo=n(),LABEL3=str_c(LABEL3,collapse=","))
+
+colnames(p_apollo_spatial) <- c("rowname","p_apollo","LABEL3")
 
 #write_delim(extract_count, "../results/extract_count.tsv", delim="\t")
 
+# ---------------------
+# tabulate area of bbox grid with the re classified corine
+# --------------------
+
+# exact_extract is a very fast function from the exactextractr package
 extract_frac = exact_extract(corine_rc,bbox_grid_sf,fun="frac")
 
 extract_frac_t <- as_tibble(extract_frac) |>
     rownames_to_column()
 
-write_delim(extract_frac_t, "../results/extract_frac.tsv", delim="\t")
+write_delim(extract_frac_t, "../results/p_apollo/geospatial/extract_frac.tsv", delim="\t")
+
+# make long format to find the dominant classes
 
 extract_frac_l <- extract_frac_t |>
     pivot_longer(-rowname,names_to="categories", values_to="frac")
 
+# greater than 0.5 is dominant, and keep the value of frac,
+# if it is not greater, then check if sum == 0, meaning
+# this cell has no value in the corine categories, and assign the value 200.
+# In all other cases, set -1
 extract_frac_dom <- extract_frac_l |>
     group_by(rowname) |>
-    mutate(sum=sum(frac), max=max(frac)) |>
-    #mutate(dominant = if_else( sum==0,200, if_else(max>0.5,max,-1))) |>
-    mutate(cat = if_else( sum==0,"zero", if_else(max>0.5,frac,"mixed"))) |>
+    mutate(sum=sum(frac),
+           max=max(frac),
+           max_variable = categories[which.max(frac)]) |>
+    mutate(dominant = if_else( sum==0,200, if_else(max>0.5,max,-1))) |>
+    #mutate(cat = if_else( sum==0,"zero", if_else(max>0.5,frac,"mixed"))) |>
     ungroup() |>
-    mutate(class=if_else(dominant==200,"zero",if_else(dominant==-1,"mixed","dominant"))) 
+    mutate(class=if_else(dominant==200,
+                         "zero",
+                         if_else(dominant==-1,"mixed","dominant"))) 
 
-
-
-extract_frac_dom_a <- extract_frac_dom |>
-    mutate(dom_cat= if_else(class=="dominant" & max==frac, categories)) |>
-
-
-    mutate(dom_value=if_else(class=="dominant" & max==frac, frac, -1))
-
+# summarise based on the cell
 extract_frac_dom_dist <- extract_frac_dom |>
-    distinct(rowname,sum,dominant,class,dom_cat)
+    distinct(rowname,sum,dominant,class,max_variable)
 
+# make a summary of the cells according to their category
 extract_frac_dom_sum <- extract_frac_dom |>
     distinct(rowname,dominant,class) |> 
     group_by(class) |>
     summarise(n=n())
 
+# join with the original table
+# manually create new columns based on manually curated 
+# corine categories
 extract_frac_dom_s <- extract_frac_t |>
-    left_join(extract_frac_dom_dist)
+    left_join(extract_frac_dom_dist) |>
+    left_join(p_apollo_spatial) |>
 
 
-extract_frac_dom_w <- extract_frac_dom |>
-    dplyr::select(-c(class,sum,maxextract_frac_dom_w)) |>
-    pivot_wider(id_cols=rowname, names_from=categories,values_from=dominant)
-
-# class, 
-# μεγαλύτερο από 0,5 είναι το dominant, και κράτα την τιμή του frac, 
-# αν δεν είναι μεγαλύτερο τότε έλεγξε αν ισχύει ότι sum==0, δηλαδή
-# το κελί αυτό δεν έχει καμία τιμή στις κατηγορίες corine, και απόδοσε την τιμή 200.
-# Στις υπόλοιπες περιπτώσεις βάλε -1
-#|>
-#    mutate(class2 = if_else(frac > 0.5,"dom",if_else(frac <= 0.5 & sum==0,"zero","mixed")))
-
-
-
-
-extract_frac_dom_w <- extract_frac_dom |>
-    dplyr::select(-frac) |>
-    pivot_wider(names_from=categories,values_from=dominant)
-
-
-#x <- rast(xmin=0, xmax=2400, ymin=0, ymax=2400, res=240)
-
-# Per-pixel area (correct in lon/lat too) based on corine resolution
-corine_rcell <- cellSize(corine_rc, unit = "m")
-
-# cross tabulate to create a contingency table.
-# doen't work well for different resolutions of cells.
-
-cori_1km_stack <- c(corine_rc, bbox_grid) # stack them first
-
-#xt <- crosstab(cori_1km_stack, long = TRUE, useNA = FALSE)  # columns: A_, B_, Freq
-
-#write_delim(xt, "xt.tsv",delim="\t")
-
-#xt_dom <- xt |>
-#    mutate(percent = n/100) |>
-#    group_by(CELLCODE) |>
-#    filter(percent==max(percent))
-    
-
-#xt_sum <- xt |>
-#    group_by(CELLCODE) |>
-#    summarise(cats_label3=str_c(LABEL3,collapse=","), 
-#              sum_n=sum(n),
-#              n_cats=n(),
-#              cats_cel=str_c(n,collapse=","))
-
+write_delim(extract_frac_dom_s,"../results/p_apollo/geospatial/extract_frac_dom_s.tsv",delim="\t")
 
 # -------------------------
 # plot rasters
