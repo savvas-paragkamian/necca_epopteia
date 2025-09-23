@@ -548,7 +548,7 @@ points_dem_sum <- points_with_vals |>
 ########################### Validation - QC Protogeni epopteia 2025 ##################
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/20250804_FINAL Invertebrates ΠΒΔ v6.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/20250828-FINAL Invertebrates ΠΒΔ v6.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
