@@ -354,10 +354,18 @@ corine_gr <- rast("../spatial_data/u2018_clc2018_v2020_20u1_raster100m_gr/crop_U
 #### EU DEM
 ###https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD
 # crop the eu dem file, it is 20gb.
-eu_dem_file <- "/Users/talos/Documents/spatial_data/EU_DEM_mosaic_5deg/eudem_dem_4258_europe.tif"
+eu_dem_file <- "/Users/talos/Documents/spatial_data/EU_DEM_mosaic_1000K/eudem_dem_3035_europe.tif"
 eurodem_gr_d <- "../spatial_data/EU_DEM_mosaic_5deg_gr/"
 
-crop_raster_by_shp(eu_dem_file,greece_regions_bbox_sf,eurodem_gr_d)
+eu_dem_e <- rast(eu_dem_file)
+
+eu_dem_gr <- crop(eu_dem_e,greece_regions_bbox_LAEA)
+
+terra::writeRaster(eu_dem_gr,
+                   "../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif",
+                   overwrite=TRUE)
+
+#crop_raster_by_shp(eu_dem_file,greece_regions_bbox_sf,eurodem_gr_d)
 
 
 # Then reload in different name and change crs
@@ -373,7 +381,7 @@ eu_dem_slope_gr_d <- "../spatial_data/EU_DEM_slope_gr/"
 
 eu_dem_slope_e <- rast(eu_dem_slope_file)
 
-eu_slope_gr <- crop(corine_europe,greece_regions_bbox_LAEA)
+eu_slope_gr <- crop(eu_dem_slope_e,greece_regions_bbox_LAEA)
 
 terra::writeRaster(eu_slope_gr,
                    "../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif",
@@ -412,7 +420,6 @@ grid_sf <- gr_1km
 
 # 3) Build a raster template aligned to the grid
 #    Set resolution to 1000 for 1-km grid (or 10000 for 10-km)
-r_ <- rast(grid_sf)         # use 10000 for 10 km
 
 r_tmpl <- rast(grid_v, res = 1000)         # use 10000 for 10 km
 
