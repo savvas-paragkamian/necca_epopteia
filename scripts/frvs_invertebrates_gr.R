@@ -383,7 +383,6 @@ slope_c <- crop(slope, bbox_grid)
 slope_r <- resample(slope_c, bbox_grid, method="average", threads=TRUE)
 writeRaster(slope_r, "../results/p_apollo/geospatial/slope_r.tif", overwrite = TRUE)
 
-stacked_rasters_n <- c(bio_raster_stack_r, dem_r, slope_r)
 
 # Corine
 ## crop doesn\'t work with factor rasters. 
@@ -477,22 +476,58 @@ extract_frac_dom_sum <- extract_frac_dom |>
 # join with the original table
 # manually create new columns based on manually curated 
 # corine categories
+# clc (23,24,25,26,27,29,31,32)
+#Create 3 new rasters: Sum percentage of clc (23,24,25,26,27,29,31,32) / Percentage of clc 26 / Sum percentage of clc (23,24,25,27,29,31,32). Caution: if sum==0, then value=NA in new rasters
+
 extract_frac_dom_s <- extract_frac_t |>
     left_join(extract_frac_dom_dist) |>
     left_join(p_apollo_spatial) |>
-
+    ungroup() |>
+    mutate(PercSuitClassAll=if_else(sum!=0,frac_23+frac_24+frac_25+frac_26+frac_27+frac_29+frac_31+frac_32,NA)) |>
+    mutate(PercSuitClassElse=if_else(sum!=0,frac_23+frac_24+frac_25+frac_27+frac_29+frac_31+frac_32,NA)) |>
+    mutate(PercFrac_26=if_else(sum!=0,frac_26,NA))
 
 write_delim(extract_frac_dom_s,"../results/p_apollo/geospatial/extract_frac_dom_s.tsv",delim="\t")
 
 # -------------------------
-# plot rasters
+# create the rasters based 
+# on the vectors that were 
+# created before
 # -------------------------
+
+#### PercSuitClassAll_m
+PercSuitClassAll_m <- as.matrix(data.frame(as.numeric(extract_frac_dom_s$rowname),as.numeric(extract_frac_dom_s$PercSuitClassAll)))
+
+PercSuitClassAll_r <- classify(x,PercSuitClassAll_m)
+names(PercSuitClassAll_r) <- "PercSuitClassAll"
+
+writeRaster(PercSuitClassAll_r, "../results/p_apollo/geospatial/PercSuitClassAll_r.tif", overwrite = TRUE)
+
+
+#### PercSuitClassElse
+PercSuitClassElse_m <- as.matrix(data.frame(as.numeric(extract_frac_dom_s$rowname),as.numeric(extract_frac_dom_s$PercSuitClassElse)))
+
+PercSuitClassElse_r <- classify(x,PercSuitClassElse_m)
+names(PercSuitClassElse_r) <- "PercSuitClassElse"
+
+writeRaster(PercSuitClassElse_r, "../results/p_apollo/geospatial/PercSuitClassElse_r.tif", overwrite = TRUE)
+
+#### PercFrac_26
+PercFrac_26_m <- as.matrix(data.frame(as.numeric(extract_frac_dom_s$rowname),as.numeric(extract_frac_dom_s$PercFrac_26)))
+
+PercFrac_26_r <- classify(x,PercFrac_26_m)
+names(PercFrac_26_r) <- "PercFrac_26"
+
+writeRaster(PercFrac_26_r, "../results/p_apollo/geospatial/PercFrac_26_r.tif", overwrite = TRUE)
+
 
 # Crop each raster using the hull
 env_stack <- crop(stacked_rasters,ext(hull_vect))
 
-num_stack <- stacked_rasters_n
+# numeric stack
+stacked_rasters_n <- c(PercFrac_26_r,PercSuitClassElse_r,PercSuitClassAll_r,bio_raster_stack_r, dem_r, slope_r)
 
+num_stack <- crop(stacked_rasters_n,ext(hull_vect))
 
 ## plot 
 #png("../figures/stacked_raster_with_points.png",
