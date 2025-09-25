@@ -166,7 +166,10 @@ ggsave("../figures/hotspots_parnassius_apollo_map.png",
 species_name <- unique(p_apollo_points$submittedName)
 
 ## data preparation
-points_convex <- st_convex_hull(st_union(p_apollo_points))
+points_convex <- p_apollo_points |>
+    st_union() |>
+    st_convex_hull() |>
+    st_buffer(dist = 1000)
 
 coords <- st_coordinates(p_apollo_points)
 
@@ -521,28 +524,28 @@ names(PercFrac_26_r) <- "PercFrac_26"
 writeRaster(PercFrac_26_r, "../results/p_apollo/geospatial/PercFrac_26_r.tif", overwrite = TRUE)
 
 
-# Crop each raster using the hull
-env_stack <- crop(stacked_rasters,ext(hull_vect))
 
 # numeric stack
 stacked_rasters_n <- c(PercFrac_26_r,PercSuitClassElse_r,PercSuitClassAll_r,bio_raster_stack_r, dem_r, slope_r)
 
+# Crop each raster using the hull
 num_stack <- crop(stacked_rasters_n,ext(hull_vect))
 
-## plot 
-#png("../figures/stacked_raster_with_points.png",
-#    width = 5000,
-#    height = 10000,
-#    res=300,
-#    units="px")
-#plot(env_stack, nr=6, nc=4)
-#dev.off()
+# extract the values
+p_apollo_stack_a <- terra::extract(stacked_rasters_n,p_apollo_points)
+p_apollo_stack <- terra::extract(num_stack,p_apollo_points)
+
+
+
+write_delim(p_apollo_points,"../results/p_apollo/p_apollo_points.tsv",delim="\t")
+
+write_delim(p_apollo_stack,"../results/p_apollo/p_apollo_stack.tsv",delim="\t")
 
 # Keep only numeric layers
 # Remove by name
 #num_stack <- env_stack[[!names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
 # Keep only categorical layers
-cat_stack <- env_stack[[names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
+#cat_stack <- env_stack[[names(env_stack) %in% c("A_VEG_TYPE","LABEL3")]]
 
 # -------------------------
 # 4. VIF Filtering (car)
@@ -594,7 +597,7 @@ cor_map_vif <- ggplot(df_cors, aes(x = Var1, y = Var2, fill = Correlation)) +
           panel.grid = element_blank()) +
     labs(title = "Correlation Matrix Heatmap", x = "", y = "")
 
-ggsave("../figures/vif_correlation_matrix.png", 
+ggsave("../figures/correlation_matrix.png", 
        plot=cor_map_vif, 
        height = 20, 
        width = 25,
@@ -605,21 +608,25 @@ ggsave("../figures/vif_correlation_matrix.png",
 # exclude the variables that have high correlation
 high_cor_indices <- find_highly_correlated(cors_mat, cutoff = 0.7)
 
-keep <- c("eudem_dem_4258_europe",
+keep <- c(
+          "eudem_dem_3035_europe",
           "eudem_slop_3035_europe",
-          "wc2.1_30s_bio_9",
-          "wc2.1_30s_bio_8",
           "wc2.1_30s_bio_3",
           "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
           "wc2.1_30s_bio_13",
-          "wc2.1_30s_bio_14")
+          "wc2.1_30s_bio_14",
+          #"PercFrac_26",
+          #"PercSuitClassElse",
+          "PercSuitClassAll"
+)
 
 # Drop them
 X_cleaned <- X[, keep]
 
 # Helper function for VIF filtering
 car_vif_drop <- function(X, thresh = 10) {
-
     X$response__ <- 1
     vars <- setdiff(names(X), "response__")
     keep <- vars
@@ -629,17 +636,40 @@ car_vif_drop <- function(X, thresh = 10) {
         if (max(v) < thresh) break
         keep <- setdiff(keep, names(which.max(v)))
     }
-    keep
+    list(v,keep)
 }
 
 selected_vars <- car_vif_drop(X_cleaned, thresh = 5) # keep 5 which is commonly used.
 
 # keep only the selected vars
-preds_1km <- num_stack[[selected_vars]]
+preds_1km_bbox <- num_stack[[selected_vars[[2]]]]
 
-# add the categorical
+# ------------------------
+# Plot
+# ------------------------
 
-preds_1km <- c(preds_1km,cat_stack)
+## plot 
+png("../figures/stacked_raster_with_points.png",
+    width = 4000,
+    height = 2500,
+    res=300,
+    units="px")
+#par(cex = 5,    # global expansion for text
+#    oma = c(4,4,4,4),   # outer margins
+#    mar = c(5,5,4,2))   # inner margins
+plot(preds_1km_bbox,
+     nr=2,
+     nc=4
+)
+dev.off()
+
+
+# mask (crop with vector) with convex hull
+
+preds_1km <- mask(preds_1km_bbox, hull_vect)
+
+## check for NA before running the model
+which(is.na(terra::extract(preds_1km, p_apollo_points)))
 
 # -------------------------
 # 5. Format Data for biomod2
@@ -650,9 +680,25 @@ myBiomodData <- BIOMOD_FormatingData(
   resp.name = species_name,
   expl.var = preds_1km,
   PA.nb.rep = 1,
-  PA.nb.absences = 1000,
+  PA.nb.absences = 10000,
   PA.strategy = 'random'
 )
+
+# -------------------------
+# Cross validation
+# -------------------------
+
+cv.r <- bm_CrossValidation(bm.format = myBiomodData,
+                           strategy = "random",
+                           nb.rep = 3,
+                           k = 0.8)
+
+# k-fold selection
+cv.k <- bm_CrossValidation(bm.format = myBiomodData,
+                           strategy = "kfold",
+                           nb.rep = 2,
+                           k = 3)
+
 
 # -------------------------
 # 6. Run Single Models
@@ -661,94 +707,82 @@ myBiomodData <- BIOMOD_FormatingData(
 ## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
 #myBiomodOptions <- bm_ModelingOptions("binary","default")
 
-my_models <- c("GLM", "RF", "ANN","MAXENT", "MARS")
 
-myBiomodOptions <- bm_ModelingOptions("binary",
-                                      models = my_models,
-                                      strategy="default",
-                                      bm.format = myBiomodData)
+# GLM could not finish
+#my_models <- c("GLM", "RF", "MAXENT")
+
+my_models <- c("MAXENT", "RF")
+#my_models <- c("GLM", "RF")
+
+#myBiomodOptions <- bm_ModelingOptions("binary",
+#                                      models = my_models,
+#                                      strategy="default",
+#                                      bm.format = myBiomodData)
+
 # Model single models
+
+
+
+
 myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
-                                    modeling.id = "P. apollo",
+                                    modeling.id = "P_apollo",
                                     models = my_models,
                                     CV.strategy = 'random',
                                     CV.nb.rep = 10,
-                                    CV.perc = 0.8,
+                                    CV.perc = 0.8, # data percent for calibration
                                     OPT.strategy = 'bigboss',
-                                    var.import = 3,
-                                    nb.cpu = 8,
-                                    metric.eval = c('TSS','ROC'))
+                                    var.import = 5,
+                                    #nb.cpu = 4,
+                                    do.progress=T,
+                                    metric.eval = c("ROC","TSS"))
                                     # seed.val = 123)
 
-############ toedit for ROC
-## 2) Choose a fitted model and load it
-mdl_name <- get_built_models(myBiomodModelOut)
-mdl <- BIOMOD_LoadModels(myBiomodModelOut, models = mdl_name)
 
-## 3) Get the data back (responses & predictors as a data.frame)
-resp <- get_formal_data(myBiomodData, 'resp.var')[[1]]  # 0/1 vector
-expl <- get_formal_data(myBiomodData, 'expl.var')       # data.frame of predictors
-
-## 4) Reproduce the same train/test split biomod used
-##    (pull it from the modeling output’s DataSplitTable)
-split_tab <- get_evaluations(myBiomodModelOut)
-## The table above holds metrics; for indices, use the saved split table:
-ds_tab <- myBiomodModelOut@data.split.table  # rows are runs; columns are indices (1=train, 0=test)
-test_idx <- which(ds_tab[1,] == 0)           # use RUN1 here
-
-## 5) Predict on ALL rows, then subset to the test set
-##    (use predict on the loaded model; biomod wraps different learners)
-pred_all <- predict(mdl, expl, on_0_1000=FALSE, type='response')
-
-## 6) Build presence/absence prediction vectors for dismo::evaluate
-p <- pred_all[resp == 1 & seq_along(resp) %in% test_idx]
-a <- pred_all[resp == 0 & seq_along(resp) %in% test_idx]
-
-## 7) ROC evaluation and plot
-e <- evaluate(p = p, a = a)
-plot(e, 'ROC')       # ROC curve
-auc(e)     
-
-model.comb <- 
-  expand.grid(
-    mod = dimnames(pred.val[,2]),
-    cv = dimnames(pred.val[,3]),
-    pa = dimnames(pred.val[,4]),
-    stringsAsFactors = FALSE
-  ) 
-
-## compute all the roc cuurves
-mod.roc <-
-  lapply(
-    1:nrow(model.comb),
-    function(i){
-      mod <- model.comb$mod[i]
-      cv <- model.comb$cv[i]
-      pa <- model.comb$pa[i]
-      
-      eval.lines <- !calib.lines[, paste0('_', cv), paste0('_', pa)]
-      
-      resp <- form.dat[eval.lines]
-      pred <- pred.val[eval.lines, mod, cv, pa] / 1000
-      
-      pROC::roc(resp, pred)
-      
-    }
-  )
-
-## plot roc curves
-par(mfrow = c(2,2)) 
-lapply(mod.roc, plot)
+PlotEvalBoxplot <- bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
 
 
+PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                      models.chosen = get_built_models(myBiomodModelOut),
+                      fixed.var = 'median',
+                      do.bivariate = TRUE)
 
 
+ggsave("../figures/PlotResponseCurves.png", 
+       plot=PlotResponseCurves$plot, 
+       height = 30, 
+       width = 40,
+       dpi = 300, 
+       units="cm",
+       device="png")
 
-############ END toedit for ROC
 
 # Get evaluation scores & variables importance
-get_evaluations(myBiomodModelOut)
+var.eval <- get_evaluations(myBiomodModelOut)
+write_delim(var.eval,"../results/var.eval.tsv",delim="\t")
+
 var.imp <- get_variables_importance(myBiomodModelOut)
+write_delim(var.imp,"../results/var.imp.tsv",delim="\t")
+
+#---------------------------------------------------
+# Plots 
+# Represent evaluation scores & variables importance
+# --------------------------------------------------
+
+var.eval_g <- ggplot() +
+    geom_boxplot(data=var.eval,
+                 mapping=aes(x=metric.eval,y=validation)) +
+  theme_bw() +
+  facet_wrap(~algo)
+
+
+ggsave("../figures/biomod_var_eval_plot.png", 
+       plot=var.eval_g, 
+       height = 20, 
+       width = 25,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
 
 # Average across runs (3rd dimension)
 var_imp_df <- var.imp |>
@@ -781,15 +815,9 @@ ggsave("../figures/biomod_var_imp_plot.png",
        units="cm",
        device="png")
 
-# Represent evaluation scores & variables importance
-bm_PlotEvalMean(bm.out = myBiomodModelOut)
-bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'algo'))
-bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('expl.var', 'algo', 'algo'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('expl.var', 'algo', 'run'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'expl.var', 'run'))
-
+# --------------------------------------------------
 # Represent response curves
+# --------------------------------------------------
 ## all runs
 
 bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
@@ -805,122 +833,47 @@ bm_PlotResponseCurves(bm.out = myBiomodModelOut,
                       fixed.var = 'median',
                       do.bivariate = TRUE)
 
+
+# --------------------------------------------------
+# Projections
+# --------------------------------------------------
+
 # project single model
 myBiomodProj <- BIOMOD_Projection(bm.mod = myBiomodModelOut,
+                                  selected.models = "all",
                                   proj.name = 'Current',
-                                  new.env = preds_1km,
+                                  new.env = stack(preds_1km),
                                   models.chosen = 'all',
                                   metric.binary = 'all',
                                   metric.filter = 'all',
-                                  build.clamping.mask = TRUE)
-myBiomodProj
+                                  build.clamping.mask = F)
 
+## get prediction
+proj_rast <- get_predictions(myBiomodProj)
+writeRaster(proj_rast, "../results/p_apollo/geospatial/SDM_prediction_current_1km.tif", overwrite = TRUE)
+
+### plot
 png("../figures/p.apollos_myBiomodProj.png", width = 3000, height = 3000, units="px")
-plot(myBiomodProj)
+plot(proj_rast)
 dev.off()
 
-proj_rast <- get_predictions(myBiomodProj)
+
+
+
+# ------------------------------------
+# Appendix
+# ------------------------------------
+
+# ------------------------------------
+# Code graveyard
+# ------------------------------------
+
+
 
 ## Response curves
 ## ROC curves
-# -------------------------
-# 6. Run Ensemble Models
-# -------------------------
-# Model ensemble models
-myBiomodEM <- BIOMOD_EnsembleModeling(bm.mod = myBiomodModelOut,
-                                      models.chosen = 'all',
-                                      em.by = 'all',
-                                      em.algo = c('EMmean', 'EMcv', 'EMci', 'EMmedian', 'EMca', 'EMwmean'),
-                                      metric.select = c('TSS'),
-                                      metric.select.thresh = c(0.7),
-                                      metric.eval = c('TSS', 'ROC'),
-                                      var.import = 3,
-                                      EMci.alpha = 0.05,
-                                      EMwmean.decay = 'proportional')
-myBiomodEM
-
-# Get evaluation scores & variables importance
-get_evaluations(myBiomodEM)
-get_variables_importance(myBiomodEM)
-
-# Represent evaluation scores & variables importance
-bm_PlotEvalMean(bm.out = myBiomodEM, group.by = 'full.name')
-bm_PlotEvalBoxplot(bm.out = myBiomodEM, group.by = c('full.name', 'full.name'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodEM, group.by = c('expl.var', 'full.name', 'full.name'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodEM, group.by = c('expl.var', 'algo', 'merged.by.run'))
-bm_PlotVarImpBoxplot(bm.out = myBiomodEM, group.by = c('algo', 'expl.var', 'merged.by.run'))
-
-# Represent response curves
-bm_PlotResponseCurves(bm.out = myBiomodEM, 
-                      models.chosen = get_built_models(myBiomodEM)[c(1, 6, 7)],
-                      fixed.var = 'median')
-bm_PlotResponseCurves(bm.out = myBiomodEM, 
-                      models.chosen = get_built_models(myBiomodEM)[c(1, 6, 7)],
-                      fixed.var = 'min')
-bm_PlotResponseCurves(bm.out = myBiomodEM, 
-                      models.chosen = get_built_models(myBiomodEM)[7],
-                      fixed.var = 'median',
-                      do.bivariate = TRUE)
-
-# Project ensemble models (from single projections)
-myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM, 
-                                             bm.proj = myBiomodProj,
-                                             models.chosen = 'all',
-                                             metric.binary = 'all',
-                                             metric.filter = 'all')
 
 
-myBiomodProj
-plot(myBiomodProj)
-
-# -------------------------
-# 6. Ensemble Modeling
-# -------------------------
-
-# Project ensemble models (from single projections)
-myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM, 
-                                             bm.proj = myBiomodProj,
-                                             models.chosen = 'all',
-                                             metric.binary = 'all',
-                                             metric.filter = 'all')
-                                             
-# Project ensemble models (building single projections)
-myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM,
-                                             proj.name = 'CurrentEM',
-                                             new.env = myExpl,
-                                             models.chosen = 'all',
-                                             metric.binary = 'all',
-                                             metric.filter = 'all')
-myBiomodEMProj
-plot(myBiomodEMProj)
-
-
-
-myBiomodEM <- BIOMOD_EnsembleModeling(
-  modeling.output = myBiomodModelOut,
-  chosen.models = "all",
-  em.by = "all",
-  eval.metric = c("TSS", "ROC"),
-  eval.metric.quality.threshold = c(0.7, 0.8)
-)
-
-# -------------------------
-# 7. Projection on 1x1 km Grid
-# -------------------------
-myBiomodProjection <- BIOMOD_Projection(
-  modeling.output = myBiomodModelOut,
-  new.env = stack(preds_1km),
-  proj.name = "current_1km",
-  selected.models = "all",
-  binary.meth = "TSS",
-  build.clamping.mask = FALSE
-)
-
-# -------------------------
-# 8. Save Output
-# -------------------------
-proj_rast <- get_predictions(myBiomodProjection)  # RasterStack
-writeRaster(proj_rast, "SDM_current_1km.tif", overwrite = TRUE)
 
 
 
@@ -1039,122 +992,3 @@ dev.off()
 
 
 
-
-# ------------------------------------
-# Appendix
-# ------------------------------------
-
-# ------------------------------------
-# Code graveyard
-# ------------------------------------
-
-## pseudo-absences
-
-## colinearity of raster data
-#library(corrr)
-#species_samples_art17_parnasious_num <- p_apollo_points |>
-#    st_drop_geometry() |>
-#    dplyr::select(where(is.numeric)) |>
-#    correlate()
-#
-#cor_ff <- species_samples_art17_parnasious_num |>
-#    pivot_longer(-term, names_to="to_term", values_to="pearson") |>
-#    filter(abs(pearson) > 0.5) |>
-#    filter(term!=to_term) |>
-#    filter(if_all(where(is.character), ~ str_detect(., "X_wc2.1|X_eudem")))
-#
-
-
-############ environmental data
-# add the hottest period, maybe important
-# add the habitat categories which are more coarce in the categories. They are only in Natura2000
-# or join some vegetation categories into one to reduce their abundance.
-# or corine raster file
-## add NDVI ? mean? which years? prioritize based on time availability
-## raster paths
-
-
-#individual_r <- lapply(individual_rasters, rast)
-#
-## the extends are different so resample is needed
-#lapply(individual_r, ext)
-#
-## Resample to match rows, columns, extent, and resolution
-#individual_res <- lapply(individual_rasters, function(f) {
-#                     r <- rast(f)
-#                     r_proj <- project(r, gr_1km_res)         # reproject if CRS differs
-#                     resample(r_proj, gr_1km_res, method="bilinear")  # or method="near" for categorical
-#})
-#individual_stack <-c(slope,dem)
-
-
-
-## function to aggregate the categorical rasters 
-## based on thresholds 
-#f_aggr <- function(v, thresh = 0.6) {
-#    v <- v[!is.na(v)]
-#    if (length(v) == 0) return(NA)
-#    tab <- table(v)
-#    prop <- tab / sum(tab)
-#    mx <- max(prop)
-#    if (mx >= thresh) {
-#      as.numeric(names(prop)[which.max(prop)])
-#    } else {
-#      100
-#    }
-#}
-
-## for corine
-#r_cat <- as.factor(corine_r)
-#r_tmpl <- gr_1km_res
-#
-#fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
-#fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
-##r_num <- as.numeric(r_cat) # drop the categories temp
-#
-#r_aggr <- terra::aggregate(r_cat,
-#                    fact = c(fact_x, fact_y),
-#                    fun = f_aggr,
-#                    thresh = 0.4)
-#
-#r_aggr <- aggregate(r_cat, fact = c(fact_x, fact_y),
-#                    fun = "modal", na.rm=TRUE)
-#r_aggr_f <- as.factor(r_aggr)
-
-# then align it exactly to template grid
-#corine_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
-#freq(corine_dom)
-#plot(corine_dom)
-
-# for vegetation
-#r_cat <- as.factor(rast(vegetation_map))
-#r_tmpl <- gr_1km_res
-#
-#r_num <- as.numeric(r_cat) # drop the categories temp
-#fact_x <- round(res(r_tmpl)[1] / res(r_cat)[1])
-#fact_y <- round(res(r_tmpl)[2] / res(r_cat)[2])
-#
-#r_aggr <- aggregate(r_num, fact = c(fact_x, fact_y),
-#                    fun = "modal", na.rm=TRUE)
-#r_aggr_f <- as.factor(r_aggr)
-#
-#
-#
-## then align it exactly to template grid
-#vegetation_map_dom <- resample(r_aggr_f, r_tmpl, method="near")   # no interpolation, just nearest
-
-
-# don't include vegetation  at this run
-
-# first resample 1km to corine, because
-# 1km has less resolution.
-#gr_1km_c <- resample(gr_1km_h,corine_rh,method="near") # ~5 min
-
-#writeRaster(corine_rh, "corine_rh.tif", overwrite=TRUE)
-
-#writeRaster(gr_1km_c, "gr_1km_c.tif", overwrite=TRUE)
-# compute factor relative to target resolution
-# Restrict to overlap for computations
-#E <- intersect(ext(corine_rh), ext(gr_1km_c))
-#corine_rE  <- crop(corine_rh, E)
-#grid_id <- crop(gr_1km_c, E)
