@@ -663,7 +663,6 @@ plot(preds_1km_bbox,
 )
 dev.off()
 
-
 # mask (crop with vector) with convex hull
 
 preds_1km <- mask(preds_1km_bbox, hull_vect)
@@ -671,19 +670,39 @@ preds_1km <- mask(preds_1km_bbox, hull_vect)
 ## check for NA before running the model
 which(is.na(terra::extract(preds_1km, p_apollo_points)))
 
-# -------------------------
-# 5. Format Data for biomod2
-# -------------------------
-myBiomodData <- BIOMOD_FormatingData(
-  resp.var = rep(1, nrow(coords)),
-  resp.xy = coords,
-  resp.name = species_name,
-  expl.var = preds_1km,
-  PA.nb.rep = 1,
-  PA.nb.absences = 10000,
-  PA.strategy = 'random'
-)
 
+# -------------------------
+# function for models
+# -------------------------
+# 
+
+
+models_function <- function(myBiomodData,model, preds) {
+
+myBiomodData <- data
+model <- model
+print(model)
+preds_1km <- preds
+
+# ---------------------------------
+# plot the rasters
+# ---------------------------------
+png(paste0("../figures/",model,"_stacked_raster_with_points.png",sep=""),
+    width = 4000,
+    height = 2500,
+    res=300,
+    units="px")
+#par(cex = 5,    # global expansion for text
+#    oma = c(4,4,4,4),   # outer margins
+#    mar = c(5,5,4,2))   # inner margins
+plot(preds_1km,
+     nr=2,
+     nc=4
+)
+dev.off()
+
+#stop("stop here")
+#}
 # -------------------------
 # Cross validation
 # -------------------------
@@ -703,10 +722,8 @@ cv.k <- bm_CrossValidation(bm.format = myBiomodData,
 # -------------------------
 # 6. Run Single Models
 # -------------------------
-
 ## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
 #myBiomodOptions <- bm_ModelingOptions("binary","default")
-
 
 # GLM could not finish
 #my_models <- c("GLM", "RF", "MAXENT")
@@ -721,13 +738,10 @@ my_models <- c("MAXENT", "RF")
 
 # Model single models
 
-
-
-
 myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
                                     modeling.id = "P_apollo",
                                     models = my_models,
-                                    CV.strategy = 'random',
+                                    CV.strategy = 'kfold',
                                     CV.nb.rep = 10,
                                     CV.perc = 0.8, # data percent for calibration
                                     OPT.strategy = 'bigboss',
@@ -737,7 +751,6 @@ myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
                                     metric.eval = c("ROC","TSS"))
                                     # seed.val = 123)
 
-
 PlotEvalBoxplot <- bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
 
 
@@ -746,8 +759,7 @@ PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut,
                       fixed.var = 'median',
                       do.bivariate = TRUE)
 
-
-ggsave("../figures/PlotResponseCurves.png", 
+ggsave(paste0("../figures/",model,"_PlotResponseCurves.png",sep=""), 
        plot=PlotResponseCurves$plot, 
        height = 30, 
        width = 40,
@@ -755,13 +767,13 @@ ggsave("../figures/PlotResponseCurves.png",
        units="cm",
        device="png")
 
-
 # Get evaluation scores & variables importance
 var.eval <- get_evaluations(myBiomodModelOut)
-write_delim(var.eval,"../results/var.eval.tsv",delim="\t")
+model="model"
+write_delim(var.eval,paste0("../results/",model,"_var.eval.tsv",sep=""),delim="\t")
 
 var.imp <- get_variables_importance(myBiomodModelOut)
-write_delim(var.imp,"../results/var.imp.tsv",delim="\t")
+write_delim(var.imp,paste0("../results/",model,"_var.imp.tsv",sep=""),delim="\t")
 
 #---------------------------------------------------
 # Plots 
@@ -775,14 +787,13 @@ var.eval_g <- ggplot() +
   facet_wrap(~algo)
 
 
-ggsave("../figures/biomod_var_eval_plot.png", 
+ggsave(paste0("../figures/",model,"_biomod_var_eval_plot.png",sep=""), 
        plot=var.eval_g, 
        height = 20, 
        width = 25,
        dpi = 300, 
        units="cm",
        device="png")
-
 
 # Average across runs (3rd dimension)
 var_imp_df <- var.imp |>
@@ -807,7 +818,7 @@ var_imp_plot <- ggplot(var_imp_df, aes(x = Model, y = Variable, fill = Importanc
     fill = "Importance"
   )
 
-ggsave("../figures/biomod_var_imp_plot.png", 
+ggsave(paste0("../figures/",model,"_biomod_var_imp_plot.png",sep=""), 
        plot=var_imp_plot, 
        height = 20, 
        width = 25,
@@ -818,177 +829,354 @@ ggsave("../figures/biomod_var_imp_plot.png",
 # --------------------------------------------------
 # Represent response curves
 # --------------------------------------------------
-## all runs
 
-bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut)[c(51:55)],
-                      fixed.var = 'mean')
-
-
-bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
-                      fixed.var = 'min')
-bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut)[3],
+response_c <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                      models.chosen = get_built_models(myBiomodModelOut),
+                      new.env = get_formal_data(myBiomodModelOut, "expl.var"),
+                      show.variables = get_formal_data(myBiomodModelOut, "expl.var.names"),
                       fixed.var = 'median',
-                      do.bivariate = TRUE)
-
+                      do.bivariate = F)
 
 # --------------------------------------------------
 # Projections
 # --------------------------------------------------
 
 # project single model
-myBiomodProj <- BIOMOD_Projection(bm.mod = myBiomodModelOut,
-                                  selected.models = "all",
-                                  proj.name = 'Current',
-                                  new.env = stack(preds_1km),
-                                  models.chosen = 'all',
-                                  metric.binary = 'all',
-                                  metric.filter = 'all',
-                                  build.clamping.mask = F)
+myBiomodProj <- BIOMOD_Projection(
+  bm.mod   = myBiomodModelOut,           # result from BIOMOD_Modeling()
+  new.env           = preds_1km,
+  proj.name         = "prob_current",
+  selected.models   = get_built_models(myBiomodModelOut),  # or a subset like grep("RF", ...)
+  binary.meth       = NULL,                # we want continuous probs, not binary
+  compress          = "xz",
+  output.format     = ".img",              # or ".img" ; for GeoTIFF see below
+  build.clamping.mask = TRUE,              # optional: flags extrapolation
+  do.stack          = TRUE,
+  keep.in.memory    = TRUE
+)
+
+# --------------------------------------------------
+# Ensemble
+# --------------------------------------------------
+
+myBiomodEM <- BIOMOD_EnsembleModeling(
+                                    bm.mod = myBiomodModelOut,
+                                    models.chosen = get_built_models(myBiomodModelOut),
+                                    em.by           = "algo",             # <- key: one model per algorithm
+                                    em.algo = c('EMmean'),
+                                    metric.select = c('ROC'),
+                                    #metric.select.thresh = c(0.7),
+                                    var.import = 3
+                                    )
+
+# Project ensemble models (from single projections)
+myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM, 
+                                             bm.proj = myBiomodProj,
+                                             models.chosen = 'all',
+                                             metric.binary = 'all',
+                                             metric.filter = 'all')
 
 ## get prediction
-proj_rast <- get_predictions(myBiomodProj)
-writeRaster(proj_rast, "../results/p_apollo/geospatial/SDM_prediction_current_1km.tif", overwrite = TRUE)
+proj_rast <- get_predictions(myBiomodEMProj)
+writeRaster(proj_rast, paste0("../results/p_apollo/geospatial/",model,"_SDM_prediction_current_1km.tif",sep=""), overwrite = TRUE)
 
 ### plot
-png("../figures/p.apollos_myBiomodProj.png", width = 3000, height = 3000, units="px")
+png(paste0("../figures/",model,"_p.apollos_myBiomodProj.png",sep=""),
+    width = 4000,
+    height = 2500,
+    res=300,
+    units="px")
 plot(proj_rast)
 dev.off()
 
+# response ensemble
+
+response_e <- bm_PlotResponseCurves(bm.out = myBiomodEM, 
+                      models.chosen = get_built_models(myBiomodEM),
+                      new.env = get_formal_data(myBiomodEM, "expl.var"),
+                      show.variables = get_formal_data(myBiomodEM, "expl.var.names"),
+                      fixed.var = 'median',
+                      do.bivariate = F)
+
+ggsave(paste0("../figures/",model,"_biomod_response_ensemble.png",sep=""), 
+       plot=response_e$plot, 
+       height = 30, 
+       width = 25,
+       dpi = 300, 
+       units="cm",
+       device="png")
 
 
+}
+############### END OF FUNCTION ###############
 
-# ------------------------------------
-# Appendix
-# ------------------------------------
+# -------------------------
+# 5. Format Data for biomod2
+# -------------------------
+
+#### model 1 
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_1km,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+
+models_function(myBiomodData,"model1",preds_1km)
+
+
+#################################################################
+#### model 2 
+#################################################################
+
+#Model 2 (bio2 + all clc)
+#	Slope
+#	Dem
+#	Bio2
+#	Bio4
+#	Bio8
+#	Bio9
+#	Bio13
+#	Bio14
+#	Sum percentage of clc (23,24,25,26,27,29,31,32)
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_2",
+          "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          #"PercFrac_26",
+          #"PercSuitClassElse",
+          "PercSuitClassAll"
+)
+
+preds_model2 <- num_stack[[keep]]
+
+# prefix
+model <- "model2"
+
+#preds_model2 <- mask(preds_model2, hull_vect)
+
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model2,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+models_function(data=myBiomodData,model="model2", preds=preds_model2)
+
+#################################################################
+#### model 3
+#################################################################
+
+#Model 3 (bio3 + clc26)
+#1.	Slope
+#2.	Dem
+#3.	Bio3
+#4.	Bio4
+#5.	Bio8
+#6.	Bio9
+#7.	Bio13
+#8.	Bio14
+#9.	Percentage of clc 26
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_3",
+          "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          "PercFrac_26",
+          #"PercSuitClassElse",
+          #"PercSuitClassAll"
+)
+
+# keep only the selected rasters
+preds_model3 <- num_stack[[keep]]
+
+# prefix
+model <- "model3"
+
+#preds_model3 <- mask(preds_model3, hull_vect)
+
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model3,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+models_function(myBiomodData,"model3", preds_model3)
+
+#################################################################
+#### model 4
+#################################################################
+
+#Model 4 (bio2 + clc26)
+#1.	Slope
+#2.	Dem
+#3.	Bio2
+#4.	Bio4
+#5.	Bio8
+#6.	Bio9
+#7.	Bio13
+#8.	Bio14
+#9.	Percentage of clc 26
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_2",
+          "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          "PercFrac_26"
+          #"PercSuitClassElse",
+          #"PercSuitClassAll"
+)
+
+preds_model4 <- num_stack[[keep]]
+
+#prefix
+model <- "model4"
+
+#preds_model4 <- mask(preds_model4, hull_vect)
+
+# data
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model4,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+models_function(data=myBiomodData,model="model4", preds=preds_model4)
+
+#################################################################
+#### model 5
+#################################################################
+#
+# Model 5 (bio3 + clc26 + clc”else” – bio4)
+#1.	Slope
+#2.	Dem
+#3.	Bio3
+#4.	Bio8
+#5.	Bio9
+#6.	Bio13
+#7.	Bio14
+#8.	Percentage of clc 26
+#9.	Sum percentage of clc (23,24,25,27,29,31,32)
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_3",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          "PercFrac_26",
+          "PercSuitClassElse"
+          #"PercSuitClassAll"
+)
+
+preds_model5 <- num_stack[[keep]]
+
+#prefix
+model <- "model5"
+
+#preds_model5 <- mask(preds_model5, hull_vect)
+
+#data
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model5,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+models_function(data=myBiomodData,"model5", preds=preds_model5)
+
+#################################################################
+#### model 6
+#################################################################
+#
+#Model 6 (bio2 + clc26 + clc”else” – bio4)
+#1.	Slope
+#2.	Dem
+#3.	Bio2
+#4.	Bio8
+#5.	Bio9
+#6.	Bio13
+#7.	Bio14
+#8.	Percentage of clc 26
+#9.	Sum percentage of clc (23,24,25,27,29,31,32)
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_2",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          "PercFrac_26",
+          "PercSuitClassElse"
+          #"PercSuitClassAll"
+)
+
+preds_model6 <- num_stack[[keep]]
+
+#prefix
+model <- "model6"
+
+#preds_model6 <- mask(preds_model6, hull_vect)
+
+# data
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model6,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.strategy = 'random'
+)
+
+models_function(data=myBiomodData,"model6", preds=preds_model6)
+# --------------------------------------------------
+# Favourite Reference Values
+# --------------------------------------------------
+
+
 
 # ------------------------------------
 # Code graveyard
 # ------------------------------------
-
-
-
-## Response curves
-## ROC curves
-
-
-
-
-
-
-
-# 3) Sample background points in M
-set.seed(1)
-preds <- env_stack
-bg <- spatSample(preds,
-                 size = 20000, method = "regular", na.rm = TRUE, as.points = TRUE, warn = FALSE)
-bg <- bg[hull_vect]  # keep only inside M
-## plot
-png("../figures/stacked_raster_sampled.png", width = 3000, height = 3000, units="px")
-plot(bg)
-dev.off()
-
-# 4) Extract env values for VIF
-
-X <- terra::extract(preds, bg, ID = FALSE)
-X <- na.omit(as.data.frame(X))
-
-# 5) Run VIF
-v <- vifstep(X, th = 10)   # or th = 5
-v@results
-vars_kept <- v@results$Variables
-
-# 6) Keep only selected predictors
-preds_sel <- preds[[vars_kept]]
-
-
-# Convert to data frame with x/y coords
-env_df <- as.data.frame(env_stack, xy = TRUE, na.rm = FALSE)
-
-# Convert habitat to factor (and match model)
-env_df$A_VEG_TYPE <- factor(env_df$A_VEG_TYPE,
-                         levels = levels(unique(p_apollo_points$A_VEG_TYPE_vegetation_map)))  # must match GLM
-
-env_df_species <- env_df |> 
-    filter(!is.na(x))
-
-#################### VIF analysis 
-###
-
-# Step 3: Rasterize the polygon (using a specific field to assign values)
-
-## resample with the gr_1km 
-#predictors <- c(gr_1km_rast,slope_rast_r,dem_rast_r,bio12_rast_r,bio15_rast_r,veg_rast_r)  # Stack the rasters
-predictors <- env_stack
-
-## extract values
-presvals <- extract(env_stack, apollo_points)
-# setting random seed to always create the same
-# random set of points for this example
-set.seed(0)
-
-# minimum convex hull or bbox to use as a background in order to exclude non present areas
-# 
-backgr <- spatSample(predictors, 1000, "random", as.points=TRUE, na.rm=TRUE)
-backgr$A_VEG_TYPE <- as.factor(backgr$A_VEG_TYPE)
-absvals <- values(backgr)
-pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
-sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
-
-png("../figures/sdmdata_pairs.png", width = 2000, height = 1500, units="px")
-pairs(sdmdata[,3:7], cex=0.8)
-
-dev.off()
-
-### 75% train and 25% predict to evaluate the performance
-
-## Model fitting
-m1 <- glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15 + A_VEG_TYPE, data=sdmdata, family = binomial)
-class(m1)
-summary(m1)
-
-### focus on maxend.
-### Random forest? 
-### future ensemble forcasting
-
-#m2 = glm(pb ~ eudem_slop_3035_europe + eudem_dem_4258_europe + wc2.1_30s_bio_12 + wc2.1_30s_bio_15, data=sdmdata)
-#m2
-
-## predicts
-library(predicts)
-env_df$predicted_prob <- predict(m1, newdata = env_df, type = "response")
-
-# Create a new raster layer for prediction
-pred_rast <- rast(env_stack[[1]])  # use template raster
-values(pred_rast) <- env_df$predicted_prob
-
-library(RColorBrewer)
-colors <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
-png("../figures/sdm_predict_apollo.png", width = 2000, height = 1500, units="px")
-plot(pred_rast, main = "Predicted Probability of Presence")
-points(apollo_points)
-dev.off()
-
-### fRP
-p <- pred_rast
-filtered_raster <- p > 0.5
-masked_raster <- mask(p, filtered_raster)
-cell_area <- res(p)[1] * res(p)[2]
-area <- sum(!is.na(masked_raster[])) * cell_area
-
-r_template <- rast(locations_10_grid_samples, resolution = 100, crs = st_crs(locations_10_grid_samples)$wkt)
-
-r <- rasterize(vect(locations_10_grid_samples),r_template ,field = "n_samples")
-
-png("../figures/sdm_predict_apollo_0_6.png", width = 2000, height = 1500, units="px")
-plot(r,col = "yellow")
-plot(filtered_raster,col = colors)
-points(apollo_points)
-dev.off()
-
-## Model evaluation
-
-
 
