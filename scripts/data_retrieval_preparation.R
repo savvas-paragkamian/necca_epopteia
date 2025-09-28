@@ -28,7 +28,11 @@ greece_regions_vec <- vect(greece_regions)
 greece_regions_bbox <- st_bbox(greece_regions) |> st_as_sfc()
 greece_regions_bbox_sf <- st_sf(geometry = greece_regions_bbox, crs = st_crs(greece_regions))
 
+# expand the bbox 
+greece_bbox_b <- st_bbox(greece_regions) + c(-2, -2, 2, 2) 
+greece_bbox_b_ext <- st_sf(st_as_sfc(greece_bbox_b))
 
+# use LAEA
 greece_regions_bbox_LAEA <- greece_regions_bbox_sf |> 
     st_transform(3035)
 ########################## species information ##############################
@@ -294,7 +298,7 @@ for (f in world_clim_files) {
         
         #read_raster
         path_raster <- f
-        crop_raster_by_shp(path_raster,greece_regions_bbox_sf,output_directory)
+        crop_raster_by_shp(path_raster,greece_bbox_b_ext,output_directory)
         
         rm(path_raster,raster_tmp,output_raster)
 
