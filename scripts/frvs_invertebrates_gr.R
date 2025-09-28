@@ -528,13 +528,36 @@ writeRaster(PercFrac_26_r, "../results/p_apollo/geospatial/PercFrac_26_r.tif", o
 # numeric stack
 stacked_rasters_n <- c(PercFrac_26_r,PercSuitClassElse_r,PercSuitClassAll_r,bio_raster_stack_r, dem_r, slope_r)
 
+
+
+stacked_rasters_examp <- c("PercSuitClassAll",
+                        "eudem_dem_3035_europe",
+                        "eudem_slop_3035_europe",
+                        "wc2.1_30s_bio_1")
+
+rasters_gr <- stacked_rasters_n[[stacked_rasters_examp]]
+
+# plot example
+png("../figures/stacked_raster_example.png",
+    width = 4000,
+    height = 1500,
+    res=300,
+    units="px")
+#par(cex = 5,    # global expansion for text
+#    oma = c(4,4,4,4),   # outer margins
+#    mar = c(5,5,4,2))   # inner margins
+plot(rasters_gr,
+     nr=1,
+     nc=4
+)
+dev.off()
+
 # Crop each raster using the hull
 num_stack <- crop(stacked_rasters_n,ext(hull_vect))
 
 # extract the values
 p_apollo_stack_a <- terra::extract(stacked_rasters_n,p_apollo_points)
 p_apollo_stack <- terra::extract(num_stack,p_apollo_points)
-
 
 
 write_delim(p_apollo_points,"../results/p_apollo/p_apollo_points.tsv",delim="\t")
@@ -664,269 +687,311 @@ plot(preds_1km_bbox,
 dev.off()
 
 # mask (crop with vector) with convex hull
-
 preds_1km <- mask(preds_1km_bbox, hull_vect)
 
+# -------------------------
 ## check for NA before running the model
+# -------------------------
 which(is.na(terra::extract(preds_1km, p_apollo_points)))
-
 
 # -------------------------
 # function for models
 # -------------------------
-# 
+
+models_function <- function(myBiomodData,model_name, preds) {
+    
+    model_name <- as.character(model_name)
+    print(model_name)
+    preds_1km <- preds
+    
+    # ---------------------------------
+    # plot the rasters
+    # ---------------------------------
+    png(paste0("../figures/",model_name,"_stacked_raster_with_points.png"),
+        width = 4000,
+        height = 2500,
+        res=300,
+        units="px")
+    #par(cex = 5,    # global expansion for text
+    #    oma = c(4,4,4,4),   # outer margins
+    #    mar = c(5,5,4,2))   # inner margins
+    plot(preds_1km,
+         nr=2,
+         nc=4
+    )
+    dev.off()
+    
+    #stop("stop here")
+    #}
+    # -------------------------
+    # Cross validation
+    # -------------------------
+    
+    cv.r <- bm_CrossValidation(bm.format = myBiomodData,
+                               strategy = "random",
+                               nb.rep = 3,
+                               k = 0.8)
+    
+    # k-fold selection
+    cv.k <- bm_CrossValidation(bm.format = myBiomodData,
+                               strategy = "kfold",
+                               nb.rep = 2,
+                               k = 3)
+    
+    
+    # -------------------------
+    # 6. Run Single Models
+    # -------------------------
+    ## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
+    #myBiomodOptions <- bm_ModelingOptions("binary","default")
+    
+    # GLM could not finish
+    #my_models <- c("GLM", "RF", "MAXENT")
+    
+    my_models <- c("MAXENT")
+    #my_models <- c("GLM", "RF")
+
+    user.MAXENT_official <- list('for_all_datasets' = list(
+                                                           betamultiplier = 0.8, 
+                                                           linear = TRUE,        
+                                                           quadratic = TRUE,
+                                                           jackknife = TRUE,
+                                                           product = TRUE,
+                                                           threshold = FALSE,    
+                                                           hinge = TRUE
+                                                           ))
+    user_val <- list(MAXENT.binary.MAXENT.MAXENT=user.MAXENT_official)
+    
+    myBiomodOptions <- bm_ModelingOptions("binary",
+                                          models = my_models,
+                                          strategy="default",
+                                          user.val = user.MAXENT_official,
+                                          bm.format = myBiomodData)
+
+    # Model single models
+    
+    myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
+                                        modeling.id = "P_apollo",
+                                        models = my_models,
+                                        CV.strategy = 'random',
+                                        CV.nb.rep = 10,
+                                        CV.perc = 0.8, # data percent for calibration
+                                        OPT.strategy = 'bigboss',
+                                        OPT.user = myBiomodOptions,
+                                        var.import = 5,
+                                        #nb.cpu = 4,
+                                        do.progress=T,
+                                        metric.eval = c("ROC","TSS"))
+                                        # seed.val = 123)
+    
+    PlotEvalBoxplot <- bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
+    
+    
+    PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                          models.chosen = grep("allRun",get_built_models(myBiomodModelOut), value=T),
+                          fixed.var = 'median',
+                          do.bivariate = TRUE)
+    
+    ggsave(paste0("../figures/",model_name,"_PlotResponseCurves.png"), 
+           plot=PlotResponseCurves$plot, 
+           height = 100, 
+           width = 100,
+           dpi = 300, 
+           units="cm",
+           device="png")
+    
+    # Get evaluation scores & variables importance
+    var.eval <- get_evaluations(myBiomodModelOut)
+    write_delim(var.eval,paste0("../results/",model_name,"_var.eval.tsv"),delim="\t")
+    
+    var.imp <- get_variables_importance(myBiomodModelOut)
+    write_delim(var.imp,paste0("../results/",model_name,"_var.imp.tsv"),delim="\t")
+    
+    #---------------------------------------------------
+    # Plots 
+    # Represent evaluation scores & variables importance
+    # --------------------------------------------------
+    
+    var.eval_g <- ggplot() +
+        geom_boxplot(data=var.eval,
+                     mapping=aes(x=metric.eval,y=validation)) +
+      theme_bw() +
+      facet_wrap(~algo)
+    
+    
+    ggsave(paste0("../figures/",model_name,"_biomod_var_eval_plot.png"), 
+           plot=var.eval_g, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+    
+    # Average across runs (3rd dimension)
+    var_imp_df <- var.imp |>
+        group_by(algo,expl.var) |>
+        summarise(Importance=mean(var.imp), .groups="keep") |>
+        mutate(Importance=round(Importance,digits=2))
+    
+    colnames(var_imp_df) <- c("Model","Variable",  "Importance")
+    
+    var_imp_plot <- ggplot() +
+      geom_tile(var_imp_df,mapping=aes(x = Model, y = Variable, fill = Importance), color = "gray90") +
+      geom_text(var_imp_df,mapping=aes(x = Model, y = Variable, label = Importance),
+                size=4) +
+      scale_fill_gradient(low = "white", high = "steelblue") +
+      theme_bw() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)
+      ) +
+      labs(
+        title = "Variable Importance Heatmap",
+        x = "Model",
+        y = "Variable",
+        fill = "Importance"
+      )
+    
+    ggsave(paste0("../figures/",model_name,"_biomod_var_imp_plot.png"), 
+           plot=var_imp_plot, 
+           height = 20, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+    
+    # --------------------------------------------------
+    # Represent response curves
+    # --------------------------------------------------
+    
+    response_c <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                          models.chosen = get_built_models(myBiomodModelOut),
+                          new.env = get_formal_data(myBiomodModelOut, "expl.var"),
+                          show.variables = get_formal_data(myBiomodModelOut, "expl.var.names"),
+                          fixed.var = 'median',
+                          do.bivariate = F)
+    
+    # --------------------------------------------------
+    # Projections
+    # --------------------------------------------------
+    
+    # project single model
+    myBiomodProj <- BIOMOD_Projection(
+      bm.mod   = myBiomodModelOut,           # result from BIOMOD_Modeling()
+      new.env           = preds_1km,
+      proj.name         = "prob_current",
+      selected.models   = get_built_models(myBiomodModelOut),  # or a subset like grep("RF", ...)
+      binary.meth       = NULL,                # we want continuous probs, not binary
+      compress          = "xz",
+      output.format     = ".img",              # or ".img" ; for GeoTIFF see below
+      build.clamping.mask = TRUE,              # optional: flags extrapolation
+      do.stack          = TRUE,
+      keep.in.memory    = TRUE
+    )
+    
+    # --------------------------------------------------
+    # Ensemble
+    # --------------------------------------------------
+    
+    myBiomodEM <- BIOMOD_EnsembleModeling(
+                                        bm.mod = myBiomodModelOut,
+                                        models.chosen = get_built_models(myBiomodModelOut),
+                                        em.by           = "algo",             # <- key: one model per algorithm
+                                        em.algo = c('EMmean'),
+                                        metric.select = c('ROC'),
+                                        #metric.select.thresh = c(0.7),
+                                        var.import = 3
+                                        )
+    
+    # Project ensemble models (from single projections)
+    myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM, 
+                                                 bm.proj = myBiomodProj,
+                                                 models.chosen = 'all',
+                                                 metric.binary = 'all',
+                                                 metric.filter = 'all')
+    
+    ## get prediction
+    proj_rast <- get_predictions(myBiomodEMProj)
+    writeRaster(proj_rast, paste0("../results/p_apollo/geospatial/",model_name,"_SDM_prediction_current_1km.tif"), overwrite = TRUE)
+    
+    ### plot
+    png(paste0("../figures/",model_name,"_p.apollos_myBiomodProj.png"),
+        width = 4000,
+        height = 2500,
+        res=300,
+        units="px")
+    plot(proj_rast)
+    dev.off()
+    
+    # response ensemble
+    
+    response_e <- bm_PlotResponseCurves(bm.out = myBiomodEM, 
+                          models.chosen = get_built_models(myBiomodEM),
+                          new.env = get_formal_data(myBiomodEM, "expl.var"),
+                          show.variables = get_formal_data(myBiomodEM, "expl.var.names"),
+                          fixed.var = 'median',
+                          do.bivariate = F)
+    
+    ggsave(paste0("../figures/",model_name,"_biomod_response_ensemble.png"), 
+           plot=response_e$plot, 
+           height = 30, 
+           width = 25,
+           dpi = 300, 
+           units="cm",
+           device="png")
+
+    
+    # return the model
+    myBiomodModelOut
 
 
-models_function <- function(myBiomodData,model, preds) {
-
-myBiomodData <- data
-model <- model
-print(model)
-preds_1km <- preds
-
-# ---------------------------------
-# plot the rasters
-# ---------------------------------
-png(paste0("../figures/",model,"_stacked_raster_with_points.png",sep=""),
-    width = 4000,
-    height = 2500,
-    res=300,
-    units="px")
-#par(cex = 5,    # global expansion for text
-#    oma = c(4,4,4,4),   # outer margins
-#    mar = c(5,5,4,2))   # inner margins
-plot(preds_1km,
-     nr=2,
-     nc=4
-)
-dev.off()
-
-#stop("stop here")
-#}
-# -------------------------
-# Cross validation
-# -------------------------
-
-cv.r <- bm_CrossValidation(bm.format = myBiomodData,
-                           strategy = "random",
-                           nb.rep = 3,
-                           k = 0.8)
-
-# k-fold selection
-cv.k <- bm_CrossValidation(bm.format = myBiomodData,
-                           strategy = "kfold",
-                           nb.rep = 2,
-                           k = 3)
-
-
-# -------------------------
-# 6. Run Single Models
-# -------------------------
-## Steven J. Phillips, Miroslav Dudík, Robert E. Schapire. [Internet] Maxent software for modeling species niches and distributions (Version 3.4.1). Available from url: http://biodiversityinformatics.amnh.org/open_source/maxent/. Accessed on 2025-7-31.
-#myBiomodOptions <- bm_ModelingOptions("binary","default")
-
-# GLM could not finish
-#my_models <- c("GLM", "RF", "MAXENT")
-
-my_models <- c("MAXENT", "RF")
-#my_models <- c("GLM", "RF")
-
-#myBiomodOptions <- bm_ModelingOptions("binary",
-#                                      models = my_models,
-#                                      strategy="default",
-#                                      bm.format = myBiomodData)
-
-# Model single models
-
-myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
-                                    modeling.id = "P_apollo",
-                                    models = my_models,
-                                    CV.strategy = 'kfold',
-                                    CV.nb.rep = 10,
-                                    CV.perc = 0.8, # data percent for calibration
-                                    OPT.strategy = 'bigboss',
-                                    var.import = 5,
-                                    #nb.cpu = 4,
-                                    do.progress=T,
-                                    metric.eval = c("ROC","TSS"))
-                                    # seed.val = 123)
-
-PlotEvalBoxplot <- bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
-
-
-PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut),
-                      fixed.var = 'median',
-                      do.bivariate = TRUE)
-
-ggsave(paste0("../figures/",model,"_PlotResponseCurves.png",sep=""), 
-       plot=PlotResponseCurves$plot, 
-       height = 30, 
-       width = 40,
-       dpi = 300, 
-       units="cm",
-       device="png")
-
-# Get evaluation scores & variables importance
-var.eval <- get_evaluations(myBiomodModelOut)
-model="model"
-write_delim(var.eval,paste0("../results/",model,"_var.eval.tsv",sep=""),delim="\t")
-
-var.imp <- get_variables_importance(myBiomodModelOut)
-write_delim(var.imp,paste0("../results/",model,"_var.imp.tsv",sep=""),delim="\t")
-
-#---------------------------------------------------
-# Plots 
-# Represent evaluation scores & variables importance
-# --------------------------------------------------
-
-var.eval_g <- ggplot() +
-    geom_boxplot(data=var.eval,
-                 mapping=aes(x=metric.eval,y=validation)) +
-  theme_bw() +
-  facet_wrap(~algo)
-
-
-ggsave(paste0("../figures/",model,"_biomod_var_eval_plot.png",sep=""), 
-       plot=var.eval_g, 
-       height = 20, 
-       width = 25,
-       dpi = 300, 
-       units="cm",
-       device="png")
-
-# Average across runs (3rd dimension)
-var_imp_df <- var.imp |>
-    group_by(algo,expl.var) |>
-    summarise(Importance=mean(var.imp), .groups="keep")
-
-colnames(var_imp_df) <- c("Model","Variable",  "Importance")
-
-var_imp_plot <- ggplot(var_imp_df, aes(x = Model, y = Variable, fill = Importance)) +
-  geom_tile(color = "gray90") +
-  scale_fill_gradient(low = "white", high = "steelblue") +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA)
-  ) +
-  labs(
-    title = "Variable Importance Heatmap",
-    x = "Model",
-    y = "Variable",
-    fill = "Importance"
-  )
-
-ggsave(paste0("../figures/",model,"_biomod_var_imp_plot.png",sep=""), 
-       plot=var_imp_plot, 
-       height = 20, 
-       width = 25,
-       dpi = 300, 
-       units="cm",
-       device="png")
-
-# --------------------------------------------------
-# Represent response curves
-# --------------------------------------------------
-
-response_c <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                      models.chosen = get_built_models(myBiomodModelOut),
-                      new.env = get_formal_data(myBiomodModelOut, "expl.var"),
-                      show.variables = get_formal_data(myBiomodModelOut, "expl.var.names"),
-                      fixed.var = 'median',
-                      do.bivariate = F)
-
-# --------------------------------------------------
-# Projections
-# --------------------------------------------------
-
-# project single model
-myBiomodProj <- BIOMOD_Projection(
-  bm.mod   = myBiomodModelOut,           # result from BIOMOD_Modeling()
-  new.env           = preds_1km,
-  proj.name         = "prob_current",
-  selected.models   = get_built_models(myBiomodModelOut),  # or a subset like grep("RF", ...)
-  binary.meth       = NULL,                # we want continuous probs, not binary
-  compress          = "xz",
-  output.format     = ".img",              # or ".img" ; for GeoTIFF see below
-  build.clamping.mask = TRUE,              # optional: flags extrapolation
-  do.stack          = TRUE,
-  keep.in.memory    = TRUE
-)
-
-# --------------------------------------------------
-# Ensemble
-# --------------------------------------------------
-
-myBiomodEM <- BIOMOD_EnsembleModeling(
-                                    bm.mod = myBiomodModelOut,
-                                    models.chosen = get_built_models(myBiomodModelOut),
-                                    em.by           = "algo",             # <- key: one model per algorithm
-                                    em.algo = c('EMmean'),
-                                    metric.select = c('ROC'),
-                                    #metric.select.thresh = c(0.7),
-                                    var.import = 3
-                                    )
-
-# Project ensemble models (from single projections)
-myBiomodEMProj <- BIOMOD_EnsembleForecasting(bm.em = myBiomodEM, 
-                                             bm.proj = myBiomodProj,
-                                             models.chosen = 'all',
-                                             metric.binary = 'all',
-                                             metric.filter = 'all')
-
-## get prediction
-proj_rast <- get_predictions(myBiomodEMProj)
-writeRaster(proj_rast, paste0("../results/p_apollo/geospatial/",model,"_SDM_prediction_current_1km.tif",sep=""), overwrite = TRUE)
-
-### plot
-png(paste0("../figures/",model,"_p.apollos_myBiomodProj.png",sep=""),
-    width = 4000,
-    height = 2500,
-    res=300,
-    units="px")
-plot(proj_rast)
-dev.off()
-
-# response ensemble
-
-response_e <- bm_PlotResponseCurves(bm.out = myBiomodEM, 
-                      models.chosen = get_built_models(myBiomodEM),
-                      new.env = get_formal_data(myBiomodEM, "expl.var"),
-                      show.variables = get_formal_data(myBiomodEM, "expl.var.names"),
-                      fixed.var = 'median',
-                      do.bivariate = F)
-
-ggsave(paste0("../figures/",model,"_biomod_response_ensemble.png",sep=""), 
-       plot=response_e$plot, 
-       height = 30, 
-       width = 25,
-       dpi = 300, 
-       units="cm",
-       device="png")
-
-
+############### END OF FUNCTION ###############
 }
 ############### END OF FUNCTION ###############
 
-# -------------------------
-# 5. Format Data for biomod2
-# -------------------------
+#
+#################################################################
 
-#### model 1 
+models_out <- list()
+
+
+#################################################################
+#### model 1
+#################################################################
+
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_3",
+          "wc2.1_30s_bio_4",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          #"PercFrac_26",
+          #"PercSuitClassElse",
+          "PercSuitClassAll"
+)
+
+preds_model1 <- num_stack[[keep]]
+
+# prefix
+model_name <- "model1"
+
+# data
 myBiomodData <- BIOMOD_FormatingData(
   resp.var = rep(1, nrow(coords)),
   resp.xy = coords,
   resp.name = species_name,
-  expl.var = preds_1km,
+  expl.var = preds_model1,
   PA.nb.rep = 1,
   PA.nb.absences = 10000,
   PA.strategy = 'random'
 )
 
-
-models_function(myBiomodData,"model1",preds_1km)
+models_out[[model_name]] <- models_function(myBiomodData,model_name,preds_model1)
 
 
 #################################################################
@@ -961,7 +1026,7 @@ keep <- c(
 preds_model2 <- num_stack[[keep]]
 
 # prefix
-model <- "model2"
+model_name <- "model2"
 
 #preds_model2 <- mask(preds_model2, hull_vect)
 
@@ -975,7 +1040,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_function(data=myBiomodData,model="model2", preds=preds_model2)
+models_out[[model_name]] <- models_function(myBiomodData,"model2",preds_model2)
 
 #################################################################
 #### model 3
@@ -1001,7 +1066,7 @@ keep <- c(
           "wc2.1_30s_bio_9",
           "wc2.1_30s_bio_13",
           "wc2.1_30s_bio_14",
-          "PercFrac_26",
+          "PercFrac_26"
           #"PercSuitClassElse",
           #"PercSuitClassAll"
 )
@@ -1010,7 +1075,7 @@ keep <- c(
 preds_model3 <- num_stack[[keep]]
 
 # prefix
-model <- "model3"
+model_name <- "model3"
 
 #preds_model3 <- mask(preds_model3, hull_vect)
 
@@ -1024,7 +1089,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_function(myBiomodData,"model3", preds_model3)
+models_out[[model_name]] <- models_function(myBiomodData,model_name, preds_model3)
 
 #################################################################
 #### model 4
@@ -1058,7 +1123,7 @@ keep <- c(
 preds_model4 <- num_stack[[keep]]
 
 #prefix
-model <- "model4"
+model_name <- "model4"
 
 #preds_model4 <- mask(preds_model4, hull_vect)
 
@@ -1073,7 +1138,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_function(data=myBiomodData,model="model4", preds=preds_model4)
+models_out[[model_name]] <- models_function(myBiomodData,model_name, preds_model4)
 
 #################################################################
 #### model 5
@@ -1106,7 +1171,7 @@ keep <- c(
 preds_model5 <- num_stack[[keep]]
 
 #prefix
-model <- "model5"
+model_name <- "model5"
 
 #preds_model5 <- mask(preds_model5, hull_vect)
 
@@ -1121,7 +1186,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_function(data=myBiomodData,"model5", preds=preds_model5)
+models_out[[model_name]] <- models_function(data=myBiomodData,model_name, preds=preds_model5)
 
 #################################################################
 #### model 6
@@ -1154,7 +1219,7 @@ keep <- c(
 preds_model6 <- num_stack[[keep]]
 
 #prefix
-model <- "model6"
+model_name <- "model6"
 
 #preds_model6 <- mask(preds_model6, hull_vect)
 
@@ -1169,7 +1234,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_function(data=myBiomodData,"model6", preds=preds_model6)
+models_out[[model_name]] <- models_function(myBiomodData,model_name, preds_model6)
 # --------------------------------------------------
 # Favourite Reference Values
 # --------------------------------------------------
