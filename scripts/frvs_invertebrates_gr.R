@@ -171,6 +171,8 @@ points_convex <- p_apollo_points |>
     st_convex_hull() |>
     st_buffer(dist = 1000)
 
+st_write(points_convex,"../results/p_apollo/geospatial/convex_hull.shp",overwrite=T,append=FALSE)
+
 coords <- st_coordinates(p_apollo_points)
 
 # ---------
@@ -324,6 +326,24 @@ corine_r_freq <- freq(corine_r)
 # 3. Crop and resample Rasters to 1X1 km Res
 # ---------------------------------------------
 
+
+bio1 <- crop(bio_raster_stack[[1]],ext(dem))
+
+png("../figures/rasters_gr.png",
+    width = 6000,
+    height = 1500,
+    res=300,
+    units="px")
+par(mfrow = c(1,4),        # 1 row, 4 columns
+    oma = c(1,1,1,1),      # outer margins
+    mar = c(1,1,1,1),      # inner margins
+    cex = 1.2)             # text size
+plot(corine, legend = FALSE, main = "CORINE Land Cover")
+plot(dem, legend = FALSE, main = "Digital Elevation Model")
+plot(slope, legend = FALSE, main = "Slope")
+plot(bio1, legend = FALSE, main = "Bioclim Layer 1")
+dev.off()
+
 # -----------------
 # bounding box 
 # using the template of gr 1km reference grid
@@ -334,10 +354,10 @@ corine_r_freq <- freq(corine_r)
 shp <- gr_1km
 
 # manual bbox of the area of interest
-xmin = 5205000
-xmax = 5565000
-ymin = 1725000
-ymax = 2185000
+xmin = 5200000
+xmax = 5570000
+ymin = 1720000
+ymax = 2180000
 
 bb <- st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = st_crs(shp))
 
@@ -528,8 +548,6 @@ writeRaster(PercFrac_26_r, "../results/p_apollo/geospatial/PercFrac_26_r.tif", o
 # numeric stack
 stacked_rasters_n <- c(PercFrac_26_r,PercSuitClassElse_r,PercSuitClassAll_r,bio_raster_stack_r, dem_r, slope_r)
 
-
-
 stacked_rasters_examp <- c("PercSuitClassAll",
                         "eudem_dem_3035_europe",
                         "eudem_slop_3035_europe",
@@ -552,17 +570,56 @@ plot(rasters_gr,
 )
 dev.off()
 
+# ----------------------------------
+# save rasters to ascii
+# ----------------------------------
+names_stacked <- names(stacked_rasters_n)
+
+for (i in seq_along(names_stacked)){
+    
+    name <- names_stacked[i]
+
+    writeRaster(
+      stacked_rasters_n[[i]],
+      filename = paste0("../results/p_apollo/geospatial/ascii/num_stack_",name,".asc"),
+      #filetype = "ascii",      # tells terra to write ESRI ASCII Grid
+      NAflag   = -9999,        # NA value written in the ASCII file
+      overwrite = TRUE
+    )
+}
+
+
+
+# ----------------------------------
 # Crop each raster using the hull
+# ----------------------------------
 num_stack <- crop(stacked_rasters_n,ext(hull_vect))
 
+
 # extract the values
-p_apollo_stack_a <- terra::extract(stacked_rasters_n,p_apollo_points)
+p_apollo_stack_a <- terra::extract(stacked_rasters_n,p_apollo_points,xy=TRUE)
+
+names(p_apollo_stack_a) <- sub("wc2.1_30s_","",names(p_apollo_stack_a))
+
+names(p_apollo_stack_a) <- sub("eudem_slop_3035_europe","slop",names(p_apollo_stack_a))
+names(p_apollo_stack_a) <- sub("eudem_dem_3035_europe","dem",names(p_apollo_stack_a))
+
+
 p_apollo_stack <- terra::extract(num_stack,p_apollo_points)
 
 
 write_delim(p_apollo_points,"../results/p_apollo/p_apollo_points.tsv",delim="\t")
 
-write_delim(p_apollo_stack,"../results/p_apollo/p_apollo_stack.tsv",delim="\t")
+write_delim(p_apollo_stack_a,"../results/p_apollo/p_apollo_stack.csv",delim=",")
+
+
+p_apollo_stack_a_shp <- p_apollo_stack_a |>
+    st_as_sf(coords=c("x","y"),
+             remove=F,
+             crs="EPSG:3035") 
+
+
+st_write(p_apollo_stack_a_shp, "../results/p_apollo/p_apollo_stack_a_shp.shp",delete_dsn = TRUE)
 
 # Keep only numeric layers
 # Remove by name
@@ -702,6 +759,7 @@ models_function <- function(myBiomodData,model_name, preds) {
     
     model_name <- as.character(model_name)
     print(model_name)
+    
     preds_1km <- preds
     
     # ---------------------------------
@@ -727,18 +785,18 @@ models_function <- function(myBiomodData,model_name, preds) {
     # Cross validation
     # -------------------------
     
-    cv.r <- bm_CrossValidation(bm.format = myBiomodData,
-                               strategy = "random",
-                               nb.rep = 3,
-                               k = 0.8)
-    
-    # k-fold selection
-    cv.k <- bm_CrossValidation(bm.format = myBiomodData,
-                               strategy = "kfold",
-                               nb.rep = 2,
-                               k = 3)
-    
-    
+    #cv.r <- bm_CrossValidation(bm.format = myBiomodData,
+    #                           strategy = "random",
+    #                           nb.rep = 3,
+    #                           k = 0.8)
+    #
+    ## k-fold selection
+    #cv.k <- bm_CrossValidation(bm.format = myBiomodData,
+    #                           strategy = "kfold",
+    #                           nb.rep = 2,
+    #                           k = 3)
+    #
+    #
     # -------------------------
     # 6. Run Single Models
     # -------------------------
@@ -748,37 +806,44 @@ models_function <- function(myBiomodData,model_name, preds) {
     # GLM could not finish
     #my_models <- c("GLM", "RF", "MAXENT")
     
-    my_models <- c("MAXENT")
+    #my_models <- c("MAXENT","MAXNET")
+    #my_models <- c("MAXNET")
+    my_models <- c("RF")
     #my_models <- c("GLM", "RF")
 
-    user.MAXENT_official <- list('for_all_datasets' = list(
-                                                           betamultiplier = 0.8, 
-                                                           linear = TRUE,        
-                                                           quadratic = TRUE,
-                                                           jackknife = TRUE,
-                                                           product = TRUE,
-                                                           threshold = FALSE,    
-                                                           hinge = TRUE
-                                                           ))
-    user_val <- list(MAXENT.binary.MAXENT.MAXENT=user.MAXENT_official)
+    #user.MAXENT_official <- list('for_all_datasets' = list(
+    #                                                       betamultiplier = 0.2,
+    #                                                       linear = TRUE,
+    #                                                       quadratic = TRUE,
+    #                                                       jackknife = TRUE,
+    #                                                       product = TRUE,
+    #                                                       lq2lqptthreshold = 0,
+    #                                                       outputformat="cloglog",
+    #                                                       hingethreshold = 0,
+    #                                                       threshold = FALSE,
+    #                                                       hinge = TRUE
+    #                                                       ))
+
+    #opts <- bm_ModelingOptions(RF = list( ntree = 1500, mtry = floor(sqrt(ncol(preds))),nodesize = 5, sampsize = NULL, replace = TRUE ))#user_val <- list(MAXENT.binary.MAXENT.MAXENT=user.MAXENT_official)
     
-    myBiomodOptions <- bm_ModelingOptions("binary",
-                                          models = my_models,
-                                          strategy="default",
-                                          user.val = user.MAXENT_official,
-                                          bm.format = myBiomodData)
+    #myBiomodOptions <- bm_ModelingOptions("binary",
+    #                                      models = my_models,
+    #                                      strategy="default",
+    ##                                      user.val = user.MAXENT_official,
+    #                                      bm.format = myBiomodData)
 
     # Model single models
     
     myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
                                         modeling.id = "P_apollo",
                                         models = my_models,
-                                        CV.strategy = 'random',
+                                        CV.strategy = 'kfold',
+                                        CV.k = 5,
                                         CV.nb.rep = 10,
-                                        CV.perc = 0.8, # data percent for calibration
+                                        CV.perc = 0.7, # data percent for calibration
                                         OPT.strategy = 'bigboss',
-                                        OPT.user = myBiomodOptions,
-                                        var.import = 5,
+    #                                    OPT.user = myBiomodOptions,
+                                        var.import = 1,
                                         #nb.cpu = 4,
                                         do.progress=T,
                                         metric.eval = c("ROC","TSS"))
@@ -787,18 +852,18 @@ models_function <- function(myBiomodData,model_name, preds) {
     PlotEvalBoxplot <- bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
     
     
-    PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                          models.chosen = grep("allRun",get_built_models(myBiomodModelOut), value=T),
-                          fixed.var = 'median',
-                          do.bivariate = TRUE)
+    #PlotResponseCurves <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+    #                      models.chosen = grep("allRun",get_built_models(myBiomodModelOut), value=T),
+    #                      fixed.var = 'median',
+    #                      do.bivariate = TRUE)
     
-    ggsave(paste0("../figures/",model_name,"_PlotResponseCurves.png"), 
-           plot=PlotResponseCurves$plot, 
-           height = 100, 
-           width = 100,
-           dpi = 300, 
-           units="cm",
-           device="png")
+    #ggsave(paste0("../figures/",model_name,"_PlotResponseCurves.png"), 
+    #       plot=PlotResponseCurves$plot, 
+    #       height = 100, 
+    #       width = 100,
+    #       dpi = 300, 
+    #       units="cm",
+    #       device="png")
     
     # Get evaluation scores & variables importance
     var.eval <- get_evaluations(myBiomodModelOut)
@@ -865,13 +930,13 @@ models_function <- function(myBiomodData,model_name, preds) {
     # Represent response curves
     # --------------------------------------------------
     
-    response_c <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
-                          models.chosen = get_built_models(myBiomodModelOut),
-                          new.env = get_formal_data(myBiomodModelOut, "expl.var"),
-                          show.variables = get_formal_data(myBiomodModelOut, "expl.var.names"),
-                          fixed.var = 'median',
-                          do.bivariate = F)
-    
+    #response_c <- bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+    #                      models.chosen = get_built_models(myBiomodModelOut),
+    #                      new.env = get_formal_data(myBiomodModelOut, "expl.var"),
+    #                      show.variables = get_formal_data(myBiomodModelOut, "expl.var.names"),
+    #                      fixed.var = 'median',
+    #                      do.bivariate = F)
+    #
     # --------------------------------------------------
     # Projections
     # --------------------------------------------------
@@ -932,7 +997,14 @@ models_function <- function(myBiomodData,model_name, preds) {
                           show.variables = get_formal_data(myBiomodEM, "expl.var.names"),
                           fixed.var = 'median',
                           do.bivariate = F)
-    
+    #i <- 0
+    #for (p in plots) {
+    #    if (!inherits(p, "ggplot")) next
+    #    i <- i + 1
+    #    ggplot2::ggsave(sprintf(paste0("../figures/",model_name,"_rcurves/rcurve_%03d.pdf"), i),
+    #              plot = p,
+    #              device = grDevices::cairo_pdf, width = 10, height = 7, limitsize = FALSE)
+    #}
     ggsave(paste0("../figures/",model_name,"_biomod_response_ensemble.png"), 
            plot=response_e$plot, 
            height = 30, 
@@ -945,7 +1017,6 @@ models_function <- function(myBiomodData,model_name, preds) {
     # return the model
     myBiomodModelOut
 
-
 ############### END OF FUNCTION ###############
 }
 ############### END OF FUNCTION ###############
@@ -955,11 +1026,9 @@ models_function <- function(myBiomodData,model_name, preds) {
 
 models_out <- list()
 
-
 #################################################################
 #### model 1
 #################################################################
-
 
 keep <- c(
           "eudem_dem_3035_europe",
@@ -977,8 +1046,18 @@ keep <- c(
 
 preds_model1 <- num_stack[[keep]]
 
+preds <- stacked_rasters_n[[keep]]
+
 # prefix
 model_name <- "model1"
+
+# disk method
+PA.d <- bm_PseudoAbsences(resp.var = rep(1, nrow(coords)),
+                          expl.var = preds_model1,
+                          nb.absences = 10000,
+                          strategy = 'random',
+                          dist.min = 1000)
+
 
 # data
 myBiomodData <- BIOMOD_FormatingData(
@@ -986,12 +1065,17 @@ myBiomodData <- BIOMOD_FormatingData(
   resp.xy = coords,
   resp.name = species_name,
   expl.var = preds_model1,
+  PA.dist.min = 1000,
   PA.nb.rep = 1,
   PA.nb.absences = 10000,
+  seed.val=123,
   PA.strategy = 'random'
 )
 
 models_out[[model_name]] <- models_function(myBiomodData,model_name,preds_model1)
+
+
+xy_all <- get_formal_data(myBiomodData, "coord")
 
 
 #################################################################
@@ -1024,6 +1108,7 @@ keep <- c(
 )
 
 preds_model2 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
 
 # prefix
 model_name <- "model2"
@@ -1040,7 +1125,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_out[[model_name]] <- models_function(myBiomodData,"model2",preds_model2)
+models_out[[model_name]] <- models_function(myBiomodData,"model2",preds)
 
 #################################################################
 #### model 3
@@ -1073,6 +1158,7 @@ keep <- c(
 
 # keep only the selected rasters
 preds_model3 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
 
 # prefix
 model_name <- "model3"
@@ -1121,6 +1207,7 @@ keep <- c(
 )
 
 preds_model4 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
 
 #prefix
 model_name <- "model4"
@@ -1169,6 +1256,7 @@ keep <- c(
 )
 
 preds_model5 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
 
 #prefix
 model_name <- "model5"
@@ -1186,7 +1274,7 @@ myBiomodData <- BIOMOD_FormatingData(
   PA.strategy = 'random'
 )
 
-models_out[[model_name]] <- models_function(data=myBiomodData,model_name, preds=preds_model5)
+models_out[[model_name]] <- models_function(myBiomodData,model_name, preds=preds_model5)
 
 #################################################################
 #### model 6
@@ -1217,9 +1305,11 @@ keep <- c(
 )
 
 preds_model6 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
 
 #prefix
-model_name <- "model6"
+#model_name <- "model6_RF"
+model_name <- "model6_maxnet"
 
 #preds_model6 <- mask(preds_model6, hull_vect)
 
@@ -1235,11 +1325,125 @@ myBiomodData <- BIOMOD_FormatingData(
 )
 
 models_out[[model_name]] <- models_function(myBiomodData,model_name, preds_model6)
+
+#
+#################################################################
+#### model 7
+#################################################################
+#
+#Model 7 (bio2 + clc26 + clc”else” – bio4)
+#1.	Slope
+#2.	Dem
+#3.	Bio2
+#4.	Bio8
+#5.	Bio9
+#6.	Bio13
+#7.	Bio14
+#8.	Percentage of clc 26
+#9.	Sum percentage of clc (23,24,25,27,29,31,32)
+
+keep <- c(
+          "eudem_dem_3035_europe",
+          "eudem_slop_3035_europe",
+          "wc2.1_30s_bio_2",
+          "wc2.1_30s_bio_8",
+          "wc2.1_30s_bio_9",
+          "wc2.1_30s_bio_13",
+          "wc2.1_30s_bio_14",
+          "PercFrac_26",
+          "PercSuitClassElse"
+          #"PercSuitClassAll"
+)
+
+preds_model7 <- num_stack[[keep]]
+preds <- stacked_rasters_n[[keep]]
+
+#prefix
+model_name <- "model7"
+
+
+parnassius_dist_b <- parnassius_dist |>
+    st_make_valid() |>
+    st_buffer(30000) |>
+    st_union()
+
+
+p_d <- vect(parnassius_dist_b)
+
+preds_model7_c <- crop(preds_model7, p_d)
+
+preds_model7_m <- mask(preds_model7_c, p_d)
+
+
+# -------------------------
+## check for NA before running the model
+# -------------------------
+which(is.na(terra::extract(preds_model7_m, p_apollo_points)))
+
+
+png("../figures/rasters_model7.png",
+    width = 6000,
+    height = 1500,
+    res=300,
+    units="px")
+par(mfrow = c(1,4),        # 1 row, 4 columns
+    oma = c(1,1,1,1),      # outer margins
+    mar = c(1,1,1,1),      # inner margins
+    cex = 1.2)             # text size
+plot(vect(p_apollo_points), legend = FALSE, main = "Points")
+plot(preds_model7_m[[1]], legend = FALSE, main = "Raster")
+plot(vect(parnassius_dist), legend = FALSE, main = "Action plan")
+plot(vect(parnassius_dist_b), legend = FALSE, main = "Action plan buffer")
+dev.off()
+
+
+# data
+myBiomodData <- BIOMOD_FormatingData(
+  resp.var = rep(1, nrow(coords)),
+  resp.xy = coords,
+  resp.name = species_name,
+  expl.var = preds_model7,
+  PA.nb.rep = 1,
+  PA.nb.absences = 10000,
+  PA.dist.min = 10000,
+  PA.strategy = 'disk'
+)
+
+models_out[[model_name]] <- models_function(myBiomodData,model_name, preds_model7_m)
+#
+
+# --------------------------------------------------
+# save models to a list
+# --------------------------------------------------
+save(models_out, file = "../results/p_apollo_models_out.RData")
+
 # --------------------------------------------------
 # Favourite Reference Values
 # --------------------------------------------------
 
+# --------------------------------------------------
+# MAXENT
+# --------------------------------------------------
 
+#library(MaxentVariableSelection)
+#
+#backgroundlocations <- system.file("extdata",
+#"Backgrounddata.csv",
+#package="MaxentVariableSelection")
+#backgroundlocations <- read.csv(backgroundlocations,header=TRUE)
+#head(backgroundlocations)
+#
+#
+#VariableSelection( maxent="maxent.jar",
+#outdir="OutputDirectory",
+#gridfolder="BioORACLEVariables",
+#occurrencelocations=system.file("extdata", "Occurrencedata.csv", package="MaxentVariableSelection"),
+#backgroundlocations=system.file("extdata", "Backgrounddata.csv", package="MaxentVariableSelection"),
+#additionalargs="nolinear noquadratic noproduct nothreshold noautofeature",
+#contributionthreshold=5,
+#correlationthreshold=0.7,
+#betamultiplier=seq(2,6,0.5)
+#)
 
 # ------------------------------------
 # Code graveyard
