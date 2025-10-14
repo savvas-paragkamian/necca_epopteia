@@ -21,7 +21,7 @@ source("necca_spatial_functions.R")
 
 
 # ------------- Data from Parmakelis LB -----------#
-verified <- st_read("~/Downloads/maps/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+verified <- st_read("../data/maps_20250802/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
 
 E2X_DB <- verified |> 
     filter(datasetNam=="E2X_DB") |>

@@ -283,6 +283,27 @@ ggsave("../figures/gbif_species_map.png",
 #       units="cm",
 #       device="png")
 
+
+
+# ------------- Data from Parmakelis LB -----------#
+# E2X_DB
+
+verified <- st_read("../data/maps_20250802/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+
+E2X_DB <- verified |> 
+    filter(datasetNam=="E2X_DB") |>
+    st_transform(4326) |>
+    st_drop_geometry() |>
+    rename(
+           "submittedName"="Species",
+           "basisOfRecord"="basisOfRec",
+           "decimalLatitude"="decimalLat",
+           "decimalLongitude"="decimalLon",
+           "datasetName"="datasetNam")
+
+write_delim(E2X_DB,"../data/E2X_DB.tsv",delim="\t")
+
+
 ################################## world Clim ####################################
 
 
@@ -403,11 +424,13 @@ terra::writeRaster(eu_slope_gr,
 ### Ecosystem types of Europe 3.1
 ecosystem_types <- "/Users/talos/Documents/spatial_data/Ecosystem_types_of_Europe_version_3.1_Terrestrial/eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif"
 
+ecosystem_types_r <- rast(ecosystem_types)
+
 ecosystem_types_gr_d <- "../spatial_data/ecosystem_types_gr/"
-crop_raster_by_shp(ecosystem_types,greece_regions_bbox_sf,ecosystem_types_gr_d)
+crop_raster_by_shp(ecosystem_types,greece_regions_bbox_LAEA,ecosystem_types_gr_d)
 
 
-#ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
+ecosystem_types_gr <- rast("/Users/talos/Documents/programming_projects/necca_epopteia/spatial_data/ecosystem_types_gr/crop_eea_r_3035_100_m_etm-terrestrial-c_2012_v3-1_r00.tif")
 
 ############### rasterize ###############
 ### reference grid ###
