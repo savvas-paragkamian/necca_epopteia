@@ -20,7 +20,7 @@
 ##      a) species metrics, population, population_n2k, distribution, range
 ## 7. Maps
 ##
-## Author: Savvas Paragkamian
+## Authors: Savvas Paragkamian, Christina Kassara
 ## 
 ## Runtime: 6 minutes 
 ##
@@ -103,7 +103,8 @@ species_names_combined <- as.character(species_taxonomy$verbatim_name)
 
 ### Species occurrences integrated ###
 species_samples_art17_all <- read_delim("../results/species_samples_art17_all.tsv", delim="\t")
-# species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
+
+species_occurrences_invertebrates <- read_delim("../results/species_occurrences_invertebrates.tsv",delim="\t")
 
 ## remove points without coordinates
 ### distinct all points
@@ -405,7 +406,7 @@ species_samples_presence_minimum <- species_samples_eea_minimum_dist |>
 ################ elevation ################
 
 ### EU DEM Greece
-eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_europe.tif")
+eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif")
 #eu_dem_gr_4258 <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4258_gr.tif")
 
 species_samples_presence_minimum_sf <- species_samples_presence_minimum |>
@@ -446,7 +447,7 @@ points_500m <- points[points$minimumDistanceFromBorders > 0 & points$minimumDist
 ## save points outside
 points_outside_cols <- points |>
     filter(minimumDistanceFromBorders >0) |>
-    dplyr::select(species, datasetName,basisOfRecord,geometry,minimumDistanceFromBorders,eudem_dem_4258_europe) |>
+    dplyr::select(species, datasetName,basisOfRecord,geometry,minimumDistanceFromBorders,eudem_dem_3035_europe) |>
     arrange(species)
 
 write_delim(points_outside_cols,
@@ -515,7 +516,7 @@ species_samples_presence_sf_ETRS89_dist <- species_samples_presence_sf_ETRS89 |>
                                        FALSE,
                                        includeDistribution)) |>
     mutate(includeDistribution=if_else(species == "Parnassius apollo" & 
-                                       eudem_dem_4258_europe <= 450 & 
+                                       eudem_dem_3035_europe <= 450 & 
                                        datasetName!="Action Plan 2019",
                                        FALSE,
                                        includeDistribution)) |>
@@ -708,6 +709,17 @@ populations_nat_c_t <- populations_nat_c |>
 write_delim(populations_nat_c_t,"../results/populations_nat_c_t.tsv",delim="\t")
 
 #stop("Spatial analysis and Master Files are ready. Exiting script.")
+
+
+#----------------------------------------------------------------------------#
+## File summary
+#----------------------------------------------------------------------------#
+species_samples_presence_final_datasets <- species_samples_presence_final |>
+    count(datasetName)
+
+species_samples_presence_final_species <-species_samples_presence_final|>
+    distinct(species, datasetName) |>
+    count(datasetName)
 
 #----------------------------------------------------------------------------#
 ################################# MAPS #######################################
