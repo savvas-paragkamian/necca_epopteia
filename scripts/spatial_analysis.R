@@ -108,6 +108,8 @@ species_occurrences_invertebrates <- read_delim("../results/species_occurrences_
 
 ## remove points without coordinates
 ### distinct all points
+### to keep the records ids of points
+### the ids of the duplicates is concatenated
 
 species_samples_simple <- species_samples_art17_all |> 
     filter(!is.na(decimalLatitude)) |>
@@ -115,9 +117,13 @@ species_samples_simple <- species_samples_art17_all |>
              decimalLatitude,
              decimalLongitude,
              datasetName,
+             collectionCode,
+             recordNumber,
              basisOfRecord,
              individualCount,
              species) |>
+    group_by(across(-recordNumber)) |>
+    summarise(recordNumber=str_c(recordNumber, collapse = ", "),.groups="keep") |>
     #left_join(species_taxonomy_only, by=c("submittedName"="verbatim_name")) |>
     mutate(species = gsub("Hirudo medicinalis","Hirudo verbana",species)) |>
     mutate(species = gsub("Unio vicarius","Unio crassus",species)) |>
@@ -139,6 +145,7 @@ points_sf <- species_samples_simple |>
     # find the duplicates
 points_duplicates <- species_samples_art17_all |>
     filter(!is.na(decimalLatitude)) |>
+    dplyr::select(-recordNumber) |>
     group_by(across(everything())) |>
     summarise(n = n(), .groups = "drop") |>
     filter(n>1)
@@ -162,6 +169,8 @@ species_samples <- points_sf_cells |>
              decimalLatitude,
              decimalLongitude,
              datasetName,
+             collectionCode,
+             recordNumber,
              basisOfRecord,
              individualCount,
              CELLCODE_eea_10km,
@@ -230,6 +239,8 @@ species_dist_national_E1_eea <- species_dist_national_E1_eea_coords |>
     mutate(
            datasetName="DistrMap_2013_2018",
            basisOfRecord="ESTIMATED_CENTROID",
+           recordNumber=paste0("DistrMap_2013_2018_",sprintf("%04d", row_number())),
+           collectionCode="GR_Art17_species_distribution.shp", 
            DistrMap_2013_2018=TRUE
            ) 
 
@@ -296,6 +307,8 @@ p_apollo_dist_d <- p_apollo_eea_coords_wgs |>
     distinct() |>
     rename("CELLCODE_eea_10km"="CELLCODE") |>
     mutate(
+           recordNumber=paste0("action_plan_p.apollo_",sprintf("%02d", row_number())),
+           collectionCode="AP_Papollo_Distribution_LAEA.shp",
            species="Parnassius apollo",
            individualCount=NA,
            submittedName="Parnassius apollo"
@@ -340,7 +353,8 @@ species_dist_national_comp <- species_dist_national_dataset |>
 national_orphans <- species_dist_national_comp |>
     filter(!c(composite_key %in% unique(species_samples_eea_minimum_dist_no_gbif$composite_key))) |>
     mutate(DistrMap_2013_2018 = TRUE) |>
-    mutate(individualCount = NA) #|>
+    mutate(individualCount = NA) 
+
     #mutate(includeDistribution = TRUE) 
 
 ##### evaluate the origin of orphans from the original file
@@ -715,11 +729,16 @@ write_delim(populations_nat_c_t,"../results/populations_nat_c_t.tsv",delim="\t")
 ## File summary
 #----------------------------------------------------------------------------#
 species_samples_presence_final_datasets <- species_samples_presence_final |>
-    count(datasetName)
+    count(datasetName) |>
+    rename("occurrence"="n")
 
 species_samples_presence_final_species <-species_samples_presence_final|>
     distinct(species, datasetName) |>
-    count(datasetName)
+    count(datasetName) |>
+    rename("species"="n") |>
+    left_join(species_samples_presence_final_datasets)
+
+write_delim(species_samples_presence_final_species,"../results/species_samples_presence_final_species_summary.tsv",delim="\t")
 
 #----------------------------------------------------------------------------#
 ################################# MAPS #######################################
@@ -733,9 +752,8 @@ datasets_colors <- c(
                      "E1X_MDPP_2014_2024"="#FDF79C",
                      "E1X_DB"="#2BA09F",
                      "E2X_DB"="maroon1",
-                     "db_refs_additional_2025"="green1",
+                     "db_refs_necca_2025"="green1",
                      "E1X_DB_references"="#141D43",
-                     "Lopes-Lima et al., 2024"="#E69F00",
                      "DistrMap_2013_2018"="darkorchid1",
                      "Action Plan 2019"="#F85C29"
                      )
