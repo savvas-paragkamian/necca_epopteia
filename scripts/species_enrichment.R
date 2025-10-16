@@ -14,10 +14,10 @@
 library(sf)
 library(tidyverse)
 library(readxl)
-library(taxize)
 library(units)
-library(vegan)
-library(rnaturalearth)
+#library(taxize)
+#library(vegan)
+#library(rnaturalearth)
 
 ############################# Load data ############################
 ## borders for maps
@@ -30,10 +30,10 @@ species_names_combined <- as.character(species_taxonomy$verbatim_name)
 ################################ Enrichment ###################################
 
 ####################### edaphobase ########################
-edaphobase_gr <- read_delim("../data/2025-02-26-edaphobase-export_GR.csv", delim=";")
+#edaphobase_gr <- read_delim("../data/2025-02-26-edaphobase-export_GR.csv", delim=";")
 
 # searching in the df multiple tokens using grepl
-edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, function(p) grepl(p, edaphobase_gr$`Valid taxon`,ignore.case = T))), ]
+#edaphobase_gr_art17 <- edaphobase_gr[Reduce(`|`, lapply(species_names_combined, function(p) grepl(p, edaphobase_gr$`Valid taxon`,ignore.case = T))), ]
 
 
 ###############################################################################
@@ -76,7 +76,10 @@ within_mat <- st_intersects(gbif_species_occ_sf,greece_regions, sparse = FALSE)
 gbif_species_occ_sf <- gbif_species_occ_sf[rowSums(within_mat) > 0, ]
 
 gbif_species_occ_gr <- gbif_species_occ_sf |>
-    st_drop_geometry()
+    st_drop_geometry() |>
+    mutate(recordNumber=occurrenceID) |>
+    mutate(collectionCode="gbif_invertebrate_species_occ.tsv") 
+
 
 print("end gbif")
 
@@ -108,7 +111,11 @@ E1X_MDPP_2014_2024_all <- E1X_MDPP_2014_2024_species_data |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
     mutate(organismQuantity=as.numeric(`Κατηγορία Σχετικής αφθονίας είδους`)) |>
     filter(organismQuantity!=0 | is.na(organismQuantity) ) |> # remove 0 of category of population
-    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) 
+    left_join(E1X_MDPP_2014_2024_samples_data, by=c("Sam_ID"="Sam_ID")) |>
+    mutate(recordNumber=Obs_ID) |>
+    mutate(collectionCode="Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v8.xlsx") 
+
+
     #mutate(submittedName=`Όνομα είδους`)
 #------------------------------------------------------------------------------#
 ######### previous monitoring from ENVECO
@@ -133,7 +140,9 @@ E1X_DB_ref_all <- E1X_DB_ref_samples_data |>
     mutate(datasetName="E1X_DB_references") |>
     mutate(basisOfRecord="MaterialCitation") |>
     mutate(submittedName=`Ονομασία είδους`) |>
-    mutate(individualCount=as.numeric(`Πλήθος ατόμων`)) 
+    mutate(individualCount=as.numeric(`Πλήθος ατόμων`)) |>
+    mutate(recordNumber=SpRef_ID) |>
+    mutate(collectionCode="Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20250802.xlsx") 
 
 
 ##### samplings
@@ -160,7 +169,9 @@ E1X_DB_all <- E1X_DB_species_data |>
     mutate(individualCount=as.numeric(`Αριθμός ατόμων είδους`)) |>
     #mutate(submittedName=`Όνομα είδους`) |>
     mutate(datasetName = "E1X_DB") |>
-    mutate(basisOfRecord="MATERIAL_SAMPLE")
+    mutate(basisOfRecord="MATERIAL_SAMPLE") |>
+    mutate(recordNumber=Obs_ID) |>
+    mutate(collectionCode="Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_ΑΣΠΟΝΔΥΛΑ_20241204.xlsx") 
 
 
 ## these data have all species that the researchers were looking for
@@ -173,8 +184,13 @@ E1X_DB_select <- E1X_DB_all |>
 #------------------------------------------------------------------------------#
 ######################## data from 2nd Reporting Period 2019-2015 
 #------------------------------------------------------------------------------#
-E2X_DB <- read_delim("../data/E2X_DB.tsv",delim="\t") |>
-    mutate(individualCount=NA)
+E2X_DB <- read_delim("../data/E2X_DB.tsv",delim="\t") 
+
+E2X_DB <- E2X_DB |>
+    mutate(individualCount=NA) |>
+    mutate(recordNumber=paste0("E2X_DB_",sprintf("%02d", row_number()))) |>
+    mutate(collectionCode="E2X_DB.tsv") 
+
 
 #------------------------------------------------------------------------------#
 ######################## other private data
@@ -186,15 +202,19 @@ Invertebrates_records_Olga <- read_delim("../data/Invertebrates_records_Olga_202
            individualCount=as.numeric(Individuals)) |>
     mutate(datasetName = "Invertebrates_records_Olga") |>
     mutate(basisOfRecord="MATERIAL_SAMPLE") |>
+    mutate(recordNumber=as.character(ID)) |>
     bind_rows(
     tibble(
       submittedName   = "Cerambyx cerdo",
       decimalLatitude = 38.077228,
       decimalLongitude = 24.380490,
       datasetName     = "Invertebrates_records_Olga",
+      recordNumber  = "157",
       basisOfRecord   = "MATERIAL_SAMPLE"
     )
-  )
+  ) |>
+    mutate(collectionCode="Invertebrates_records_Olga_20250427.csv")
+
 
 ## add a new point
 #submittedName="Cerambyx cerdo"
@@ -217,13 +237,17 @@ unio_crassus_complex_gr <- unio_crassus_complex |>
            "submittedName"="SPECIES") |>
     mutate(
            submittedName=gsub("U.", "Unio",submittedName),
-           datasetName="Lopes-Lima et al., 2024",
-           basisOfRecord="MATERIAL_SAMPLE") |>
+           datasetName="db_refs_necca_2025",
+           collectionCode="unio_crassus_complex_supplementary.xlsx",
+           recordNumber=paste0("Lopes-Lima_2024_",sprintf("%02d", row_number())),
+           basisOfRecord="MaterialCitation") |>
     mutate(individualCount=NA) |>
     filter(COUNTRY=="Greece") |>
     dplyr::distinct(datasetName,
                     basisOfRecord,
                     submittedName,
+                    collectionCode,
+                    recordNumber,
                     individualCount,
                     decimalLatitude,
                     decimalLongitude) 
@@ -241,7 +265,9 @@ necca_redlist_points_df <- necca_redlist_points |>
     rename("submittedName"="sci_name") |>
     mutate(datasetName = "NECCA_redlist") |>
     mutate(individualCount=NA) |>
-    mutate(basisOfRecord="MATERIAL_SAMPLE")
+    mutate(basisOfRecord="MATERIAL_SAMPLE") |>
+    mutate(recordNumber=paste0("NECCA_redlist_",sprintf("%03d", row_number()))) |>
+    mutate(collectionCode="points_invertebrates.gpkg") 
 
 necca_redlist_polygons <- st_read("../data/necca_redlist/polygons_invertebrates.gpkg")
 
@@ -319,6 +345,8 @@ columns_to_keep <- c("submittedName",
                      "decimalLatitude",
                      "decimalLongitude",
                      "datasetName",
+                     "recordNumber",
+                     "collectionCode",
                      "basisOfRecord",
                      "individualCount")
 
