@@ -5,7 +5,7 @@
 ## Purpose of script: Calculate the Favourite Reference Values
 ## of the invertebrates in Greece
 ##
-## Author: Savvas Paragkamian
+## Author: Savvas Paragkamian, Christina Kassara
 ##
 ## Date Created: 2025-03-13
 

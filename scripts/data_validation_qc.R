@@ -20,22 +20,6 @@ library(ggnewscale)
 source("necca_spatial_functions.R")
 
 
-# ------------- Data from Parmakelis LB -----------#
-verified <- st_read("../data/maps_20250802/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
-
-E2X_DB <- verified |> 
-    filter(datasetNam=="E2X_DB") |>
-    st_transform(4326) |>
-    st_drop_geometry() |>
-    rename(
-           "submittedName"="Species",
-           "basisOfRecord"="basisOfRec",
-           "decimalLatitude"="decimalLat",
-           "decimalLongitude"="decimalLon",
-           "datasetName"="datasetNam")
-
-write_delim(E2X_DB,"../data/E2X_DB.tsv",delim="\t")
-
 # ------------- Data from other datasets -----------#
 ###
 species_samples_art17 <- read_delim("../results/species_samples_art17.tsv", delim="\t")
@@ -74,6 +58,22 @@ eu_dem_gr <- rast("../spatial_data/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_4326_gr.
 
 ### EU DEM Greece slope
 eu_dem_slope <- rast("../spatial_data/EU_DEM_slope_gr/crop_eudem_slop_3035_europe.tif")
+
+# ------------- Data from Parmakelis LB -----------#
+verified <- st_read("../data/maps_20250802/VerifiedOccurrenceDB_PlusOrphans_LAEA.shp")
+
+E2X_DB <- verified |> 
+    filter(datasetNam=="E2X_DB") |>
+    st_transform(4326) |>
+    st_drop_geometry() |>
+    rename(
+           "submittedName"="Species",
+           "basisOfRecord"="basisOfRec",
+           "decimalLatitude"="decimalLat",
+           "decimalLongitude"="decimalLon",
+           "datasetName"="datasetNam")
+
+write_delim(E2X_DB,"../data/E2X_DB.tsv",delim="\t")
 
 
 ########################### Validation - QC ###########################
@@ -544,11 +544,41 @@ points_dem_sum <- points_with_vals |>
 
 
 
+# ----------------------------------------------------------------------------#
+#################### Validation - QC Protogeni epopteia 2025 ##################
+######################### vasi dedomenon anadoxou #############################
+# ----------------------------------------------------------------------------#
 
-########################### Validation - QC Protogeni epopteia 2025 ##################
+deigmata_data_old <- read_xlsx("../anadoxos_deliverables/20250828-FINAL Invertebrates ΠΒΔ v6.xlsx",
+                           sheet="Δείγματα Ασπόνδυλων",
+                           col_names=T
+                           ) |> slice(-1)
+
+deigmata_data_old_sf <- deigmata_data_old |>
+    filter(!is.na(Sam_ID)) |>
+    mutate(latitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
+           longitude=as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)) |>
+    filter(!is.na(longitude)) |> 
+    st_as_sf(
+             coords=c("longitude","latitude"),
+             remove=F,
+             crs="WGS84")
+
+
+dist_matrix_old <- st_distance(deigmata_data_old_sf, greece_regions)
+deigmata_data_old_sf$min_dist_m <- apply(dist_matrix_old, 1, min)
+
+
+# points inside
+points_inside_or_touching_old <- deigmata_data_old_sf[deigmata_data_old_sf$min_dist_m ==0, ]
+
+points_outside_old <- deigmata_data_old_sf[deigmata_data_old_sf$min_dist_m >0,]
+
+print("Samples with coordinates in the sea or out of hellenic border")
+deigmata_data_old_sf |> filter(min_dist_m>0) |> dplyr::select(Sam_ID, min_dist_m) 
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/20250828-FINAL Invertebrates ΠΒΔ v6.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
@@ -577,9 +607,18 @@ st_write(deigmata_data_sf,
          delete_layer = TRUE)
 
 
+############### sample duplicates 
+
+deigmata_data_qc_sam <- deigmata_data_qc |> 
+    count(Sam_ID) |>
+    arrange(desc(n))
+
+print("there are duplicates in Sam_ID?")
+table(deigmata_data_qc_sam$n)
+
 ######## Eidi
 
-eidi_data <- read_xlsx("../anadoxos_deliverables/20250804_FINAL Invertebrates ΠΒΔ v6.xlsx",
+eidi_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25.xlsx",
                        sheet="Είδη",
                        col_names=T
                            ) |> slice(-1) |> filter(!is.na(Obs_ID))
