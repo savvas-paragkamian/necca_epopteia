@@ -578,7 +578,7 @@ print("Samples with coordinates in the sea or out of hellenic border")
 deigmata_data_old_sf |> filter(min_dist_m>0) |> dplyr::select(Sam_ID, min_dist_m) 
 
 ######## Deigmata 
-deigmata_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25.xlsx",
+deigmata_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25_KP.xlsx",
                            sheet="Δείγματα Ασπόνδυλων",
                            col_names=T
                            ) |> slice(-1)
@@ -588,6 +588,11 @@ deigmata_data_qc <- deigmata_data |>
     mutate(latitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
            longitude=as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)) 
 
+deigmata_data_qc_lixi <- deigmata_data |> 
+    filter(!is.na(Sam_ID)) |>
+    mutate(latitude=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Τέλος`),
+           longitude=as.numeric(`Γεωγραφικό Μήκος (WGS84) Τέλος`)) 
+    
 ########### qc missing coordinates
 
 deigmata_data_qc_missing <- deigmata_data_qc |>
@@ -606,6 +611,121 @@ st_write(deigmata_data_sf,
          layer = "deigmata_data_sf",
          delete_layer = TRUE)
 
+# END OF transect
+deigmata_data_sf_lixi <- deigmata_data_qc_lixi |>
+    filter(!is.na(longitude)) |>
+    st_as_sf(
+             coords=c("longitude","latitude"),
+             remove=F,
+             crs="WGS84")
+
+
+
+deigmata_data_sd_lixi_qc_sam <- deigmata_data_sf_lixi |> 
+    count(Sam_ID) |>
+    arrange(desc(n))
+
+dist_matrix <- st_distance(deigmata_data_sf_lixi, greece_regions)
+
+deigmata_data_sf_lixi$min_dist_m <- apply(dist_matrix, 1, min)
+
+# points inside
+points_inside_or_touching_l <- deigmata_data_sf_lixi[deigmata_data_sf_lixi$min_dist_m ==0, ]
+
+points_outside_lixi <- deigmata_data_sf_lixi[deigmata_data_sf_lixi$min_dist_m >0,]
+
+print("Samples with coordinates in the sea or out of hellenic border")
+deigmata_data_sf_lixi |> filter(min_dist_m>0) |> dplyr::select(Sam_ID, min_dist_m) 
+
+
+epopteia_2025_species_gr_map_lixi <- ggplot() +
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_point(deigmata_data_sf_lixi,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color=`Χρηματοδοτικό Μέσο`),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    geom_point(points_outside_lixi,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color="outside"),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    coord_sf(crs="WGS84") +
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position = "bottom",
+          legend.box.background = element_blank())
+
+ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map_lixi.png", 
+       plot=epopteia_2025_species_gr_map_lixi, 
+       height = 20, 
+       width = 20,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
+
+# transect 
+
+lines_sf <- deigmata_data %>%
+    filter(!is.na(Sam_ID)) |>
+    mutate(latitude_start=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
+           longitude_start=as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)) |>
+    mutate(latitude_end=as.numeric(`Γεωγραφικό Πλάτος (WGS84) Τέλος`),
+           longitude_end=as.numeric(`Γεωγραφικό Μήκος (WGS84) Τέλος`)) |>
+    filter(!is.na(longitude_start) & !is.na(longitude_end)) |>
+    rowwise() %>%
+    mutate(geometry = list(st_linestring(
+                                    matrix(c(longitude_start, latitude_start,
+                                             longitude_end, latitude_end),
+                                           ncol = 2, byrow = TRUE)
+                                    ))) %>%
+    st_as_sf(crs = 4326) |>
+    mutate(length_m = st_length(geometry),           # units: m
+         length_km = set_units(length_m, "km"))
+
+
+lines_sf_s <- lines_sf |>
+    dplyr::select(Sam_ID,`Μήκος Διατομής (m)`, length_m,geometry)
+
+
+epopteia_2025_species_gr_map_lines <- ggplot() +
+    geom_sf(greece_regions, mapping=aes()) +
+    geom_sf(lines_sf,
+            mapping=aes(
+                        color=`Χρηματοδοτικό Μέσο`),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    geom_point(points_outside_lixi,
+            mapping=aes(x=longitude,
+                        y=latitude,
+                        color="outside"),
+            size=1.8,
+            alpha=0.8,
+            show.legend=T) +
+    coord_sf(crs="WGS84") +
+    theme_bw()+
+    theme(axis.title=element_blank(),
+          axis.text=element_text(colour="black"),
+          legend.title = element_text(size=8),
+          legend.position = "bottom",
+          legend.box.background = element_blank())
+
+ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map_lines.png", 
+       plot=epopteia_2025_species_gr_map_lines, 
+       height = 20, 
+       width = 20,
+       dpi = 300, 
+       units="cm",
+       device="png")
+
 
 ############### sample duplicates 
 
@@ -618,7 +738,7 @@ table(deigmata_data_qc_sam$n)
 
 ######## Eidi
 
-eidi_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25.xlsx",
+eidi_data <- read_xlsx("../anadoxos_deliverables/ΒΠΔ_final_26_10_25_KP.xlsx",
                        sheet="Είδη",
                        col_names=T
                            ) |> slice(-1) |> filter(!is.na(Obs_ID))
@@ -783,12 +903,48 @@ ggsave("../anadoxos_deliverables/anadoxos_samples/epopteia_2025_species_gr_map.p
 
 ################### n2k overlap ################
 
+# start of the transect
 points_n2k_joined <- st_join(deigmata_data_sf_ETRS89,
                              N2000_v32_ETRS89,
                              join = st_intersects,
                              left = TRUE,
                              largest = FALSE)
 
+
+points_n2k_summary <- points_n2k_joined |>
+    mutate(n2k_ekpa=`Κωδικός περιοχής NATURA 2000\r\nτων συντεταγμένων αρχής (Έλεγχος πεδίων O & P)`) |>
+    dplyr::select(Sam_ID,n2k_ekpa,SITECODE,geometry) |>
+    group_by(Sam_ID) |>
+    mutate(sitecode_m=str_c(SITECODE,collapse="; ")) |>
+    distinct(Sam_ID,n2k_ekpa,sitecode_m) |>
+    mutate(n2k_equal=n2k_ekpa==sitecode_m)
+
+write_delim(points_n2k_summary,"../anadoxos_deliverables/anadoxos_samples/points_n2k_summary.tsv",delim="\t")
+
+
+# end of the transect
+
+deigmata_data_sf_lixi_ETRS89 <- st_transform(deigmata_data_sf_lixi,3035)
+
+
+points_n2k_joined_lixi <- st_join(deigmata_data_sf_lixi_ETRS89,
+                             N2000_v32_ETRS89,
+                             join = st_intersects,
+                             left = TRUE,
+                             largest = FALSE)
+
+
+points_n2k_summary_lixi <- points_n2k_joined_lixi |>
+    mutate(n2k_ekpa=`Κωδικός περιοχής NATURA 2000\r\nτων συντεταγμένων τέλους (Έλεγχος πεδίων R & S)`) |>
+    dplyr::select(Sam_ID,n2k_ekpa,SITECODE,geometry) |>
+    group_by(Sam_ID) |>
+    mutate(sitecode_m=str_c(SITECODE,collapse="; ")) |>
+    distinct(Sam_ID,n2k_ekpa,sitecode_m) |>
+    mutate(n2k_equal=n2k_ekpa==sitecode_m)
+
+write_delim(points_n2k_summary_lixi,"../anadoxos_deliverables/anadoxos_samples/points_n2k_summary_lixi.tsv",delim="\t")
+
+# general n2k analysis
 points_n2k <- st_intersects(points_n2k_joined, N2000_v32_ETRS89)
 
 # do it at once with mutate
@@ -800,13 +956,11 @@ points_distinct_n2k <- points_n2k_joined |>
 print("species category per samples and appearrance in NATURA2000")
 table(points_distinct_n2k$n2k,points_distinct_n2k$species_category)
 
-
 natura_colors <- c(
                    "SCI"="#E69F00",
                    "SPA"="#56B4E9",
                    "SCISPA"="#CC79A7"
 )
-
 
 ## natura2000
 g_base_n2000 <- ggplot()+
