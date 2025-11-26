@@ -269,6 +269,8 @@ necca_redlist_points_df <- necca_redlist_points |>
     mutate(recordNumber=paste0("NECCA_redlist_",sprintf("%03d", row_number()))) |>
     mutate(collectionCode="points_invertebrates.gpkg") 
 
+write_delim(necca_redlist_points_df,"../data/necca_redlist/necca_redlist_points_df.tsv",delim="\t")
+
 necca_redlist_polygons <- st_read("../data/necca_redlist/polygons_invertebrates.gpkg")
 
 
