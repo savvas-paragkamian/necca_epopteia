@@ -1,0 +1,14 @@
+FROM docker.io/rocker/geospatial:4.5.2
+
+# CLI tools only (no RStudio)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates curl less \
+    vim tmux ripgrep fzf \
+  && rm -rf /var/lib/apt/lists/*
+
+# renv as infra (project packages will be installed via renv later)
+RUN R -q -e "install.packages('renv', repos='https://cloud.r-project.org')"
+
+WORKDIR /workspaces/project
+USER rstudio
+ENTRYPOINT ["/bin/bash"]
