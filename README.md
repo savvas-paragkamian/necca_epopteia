@@ -19,6 +19,9 @@ the period 10-2024 until 07-2025.
 * [Software](#software)
 * [Licence](#licence)
 
+## Environment
+
+Container
 
 ## Scripts
 
