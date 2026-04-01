@@ -1,0 +1,7 @@
+renv/library/
+renv/staging/
+.Rhistory
+.RData
+.Ruserdata
+_targets/
+.DS_Store
