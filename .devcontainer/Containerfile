@@ -1,13 +1,22 @@
-FROM docker.io/rocker/geospatial:4.5.2
+FROM docker.io/rocker/geospatial:4.5.3
 
 # CLI tools only (no RStudio)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates curl less \
     vim tmux ripgrep fzf \
+    cmake \
+    libabsl-dev \
+    libglpk-dev \
+    libuv1-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # renv as infra (project packages will be installed via renv later)
-RUN R -q -e "install.packages('renv', repos='https://cloud.r-project.org')"
+RUN R -q -e "install.packages(c('renv'), repos='https://cloud.r-project.org', version='1.2.0')"
+# targets for the R pipeline
+RUN R -q -e "install.packages(c('targets','tarchetypes'), repos='https://cloud.r-project.org')"
+
+# for renv, don't use cache 
+ENV RENV_CONFIG_CACHE_ENABLED=FALSE
 
 WORKDIR /workspaces/project
 USER rstudio
