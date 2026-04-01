@@ -9,7 +9,7 @@ the period 10-2024 until 07-2025.
 
 ## Contents
 
-* [Scripts](#scripts)
+* [Workflow](#workflow)
 * [Species enrichment](#species-enrichment)
 * [Spatial analysis](#spatial-analysis)
 * [Favourable Reference Values](#favourable-reference-values)
@@ -19,11 +19,60 @@ the period 10-2024 until 07-2025.
 * [Software](#software)
 * [Licence](#licence)
 
-## Environment
 
-Container
+## Workflow
 
-## Scripts
+
+```
+git clone https://github.com/savvas-paragkamian/necca_epopteia.git 
+
+cd necca_epopteia
+```
+
+### Container
+
+In this work we use the podman container which is free and open source,
+follows the Open Container Initiative and is compatible with Docker.
+
+To build the podman container
+
+```
+podman build -t myproj-rgeo:4.5.3 -f .devcontainer/Containerfile .
+
+```
+
+From inside the git repository then enter the container:
+
+```
+podman run --rm -it \
+    --userns=keep-id \
+        -v "$PWD":/workspaces/project:Z \
+        art17-rgeo:4.5.3
+
+```
+
+Specify the memory and cpus for the container, increase because podman
+by defailt allocates a few resourses.
+```
+podman machine stop
+podman machine set --memory 12288 --cpus 5
+podman machine start
+
+```
+
+
+### R Environment
+
+
+The renv tool is used to ensure reproducibility of the computational environment at the R package level by recording the exact versions of all libraries required for the analysis. Within this project, the renv.lock file serves as the reference point for recreating the environment on any system. Upon first use, the user is required to install the renv package and run the command renv::restore(), which automatically installs all necessary dependencies at the specified versions. After any modification to the package set (e.g. adding a new library), the user should run renv::snapshot() to update the lockfile accordingly. This workflow guarantees that the analysis can be consistently reproduced across different computing environments.
+
+
+```
+renv::restore()
+```
+
+
+### ETL Pipeline
 
 ![The flowchart of the scripts for the calculation of FRVs](invertebrates_frvs_script_flowchart.png)
 The scripts in this repository are (with the order of execution):
