@@ -8,16 +8,25 @@
 ## taxonomy. The script is interactive, i.e not to executed all at once.
 ##
 ## Date Created: 2024-11-06
+ 
+# activate the renv
 
+# load packages
 library(sf)
 library(terra)
-library(tidyverse)
 library(readxl)
 library(taxize)
 library(rgbif)
-library(units)
-#library(rnaturalearth)
+library(dplyr)
+library(readr)
+library(ggplot2)
+
+renv::status()
+
+setwd("scripts/")
 source("necca_spatial_functions.R")
+
+
 
 
 ###
@@ -167,16 +176,16 @@ gbif_taxon_ids_interactive <- get_gbifid(species_names_combined)
 #gbif_taxon_keys <- as.numeric(na.omit(species_gbif_df$gbifid.ids))
 #
 ## run once to request the download from the server
-occ_download(
-pred_in("taxonKey", gbif_taxon_keys), # important to use pred_in
-pred("country", "GR"),
-pred("hasCoordinate", TRUE),
-pred("hasGeospatialIssue", FALSE),
-format = "SIMPLE_CSV"
-)
+#occ_download(
+#pred_in("taxonKey", gbif_taxon_keys), # important to use pred_in
+#pred("country", "GR"),
+#pred("hasCoordinate", TRUE),
+#pred("hasGeospatialIssue", FALSE),
+#format = "SIMPLE_CSV"
+#)
 
 # download on 16/7/2025
-occ_download_wait('0024201-250711103210423')
+#occ_download_wait('0024201-250711103210423')
 #  Status: SUCCEEDED
 #  DOI: 10.15468/dl.dyfhdg
 #  Format: SIMPLE_CSV

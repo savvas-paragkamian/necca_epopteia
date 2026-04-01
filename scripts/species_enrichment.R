@@ -12,12 +12,18 @@
 #-----------------------------------------------------------------------------#
 
 library(sf)
-library(tidyverse)
 library(readxl)
-library(units)
-#library(taxize)
-#library(vegan)
-#library(rnaturalearth)
+library(dplyr)
+library(readr)
+library(stringr)
+library(purrr)
+library(tibble)
+library(magrittr)
+
+
+renv::status()
+
+setwd("scripts/")
 
 ############################# Load data ############################
 ## borders for maps

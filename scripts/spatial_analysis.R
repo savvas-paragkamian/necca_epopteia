@@ -28,12 +28,22 @@
 
 library(sf)
 library(terra)
-library(tidyverse)
-library(readxl)
 library(units)
-library(ggpubr)
+library(readxl)
+library(dplyr)
+library(readr)
+library(stringr)
+library(tidyr)
+library(tibble)
+library(ggplot2)
 library(ggnewscale)
+
+renv::status()
+
+setwd("scripts/")
+
 source("necca_spatial_functions.R")
+
 
 #----------------------------------------------------------------------------#
 ########################### Load Spatial Data ################################

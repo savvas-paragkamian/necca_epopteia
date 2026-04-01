@@ -1,20 +1,22 @@
 #!/usr/bin/Rscript
 
-## Script name: species_enrichment.R
+## Script name: 
 ##
-## Purpose of script: use public databases to retrieve information of 
-## species regarding their taxonomy, their global distribution and their 
-## IUCN status
+## Purpose of script:
 ##
 ## Author: Savvas Paragkamian
 ##
 ## Date Created: 2024-11-06
 
 library(sf)
-library(tidyverse)
+library(terra)
 library(readxl)
+library(readr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpubr)
 library(units)
-library(rnaturalearth)
 
 ############################# Load data ############################
 ## borders for maps
