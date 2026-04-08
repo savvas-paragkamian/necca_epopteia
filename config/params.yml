@@ -1,0 +1,31 @@
+reporting:
+  framework: "A17"
+  period: "2019-2024"
+  country: "GR"
+  group: "Invertebrates"
+
+paths:
+  raw_data_dir: "data/raw"
+  interim_data_dir: "data/interim"
+  derived_data_dir: "data/derived"
+  spatial_data_dir: "data/spatial"
+  results_dir: "results"
+  maps_dir: "results/maps"
+
+inputs:
+  taxonomy_curated: "data/raw/species_taxonomy_curated.tsv"
+
+  greece_regions: "data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp"
+  eea_grid_1km: "data/spatial/eea_reference_grid/gr_1km.shp"
+  eea_grid_10km: "data/spatial/eea_reference_grid/gr_10km.shp"
+  natura2000: "data/spatial/N2000_spatial_GR_2021_12_09_v32/N2000_spatial_GR_2021_12_09_v32.shp"
+  eu_dem: "data/spatial/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif"
+
+outputs:
+  species_occurrences_invertebrates: "data/derived/species_occurrences_invertebrates.tsv"
+  species_samples_art17_all: "data/derived/species_samples_art17_all.tsv"
+
+  species_samples_presence_final: "results/species_samples_presence_final.tsv"
+  distributions_presence_final: "results/distributions_presence_final.tsv"
+  populations_presence_final: "results/populations_presence_final.tsv"
+  maps_dir: "results/maps"
