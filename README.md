@@ -228,7 +228,7 @@ R 4.5.3 managed via `renv`. Key packages:
 ## Licence
 MIT License
 
-Copyright (c) 2025 Savvas Paragkamian, NECCA, Greece
+Copyright (c) 2025 Paragkamian, S., Tzortzakaki, O., Goudeli, G., Vourka, A. and Kassara, C., NECCA, Greece
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
