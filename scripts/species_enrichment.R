@@ -29,7 +29,7 @@ setwd("scripts/")
 ## borders for maps
 greece_regions <- sf::st_read("../spatial_data/gadm41_GRC_shp/gadm41_GRC_2.shp")
 
-species_taxonomy <- read_delim("../results/species_gbif_taxonomy_curated.tsv",delim="\t")
+species_taxonomy <- read_delim("../results/species_taxonomy_curated.tsv",delim="\t")
 
 species_names_combined <- as.character(species_taxonomy$verbatim_name)
 

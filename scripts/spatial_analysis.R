@@ -588,6 +588,9 @@ write_delim(species_samples_presence_final,
             "../results/species_samples_presence_final.tsv",
             delim="\t")
 
+
+#species_samples_presence_final <- read_delim("../results/species_samples_presence_final.tsv", delim="\t")
+
 ################### with private data #################
 species_samples_presence_final_private <- species_samples_presence_pop |>
     st_drop_geometry()
