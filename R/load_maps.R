@@ -1,3 +1,18 @@
+## Script name: load_maps.R
+##
+## Authors: Savvas Paragkamian
+##
+## Date Created: 2025-02-01
+##
+## Purpose of script:
+## Map generation functions for the Article 17 reporting outputs.
+## Produces overview maps (Natura 2000 base, Art. 17 all species,
+## border-quality QC) and per-species maps (occurrences, range,
+## distribution density). All functions return the written file
+## path(s) for use with targets format = "file".
+##
+## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
+
 library(sf)
 library(dplyr)
 library(ggplot2)

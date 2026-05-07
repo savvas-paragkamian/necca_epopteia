@@ -1,3 +1,17 @@
+## Script name: _targets.R
+##
+## Authors: Savvas Paragkamian, Christina Kassara
+##
+## Date Created: 2025-11-01
+##
+## Purpose of script:
+## Pipeline definition for the invertebrate monitoring workflow.
+## Orchestrates the full Extract → Transform → Load chain for the
+## Article 17 (Directive 92/43/EEC) reporting period 2019–2024.
+## Run with targets::tar_make().
+##
+## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
+
 library(targets)
 library(tarchetypes)
 library(yaml)

@@ -1,3 +1,18 @@
+## Script name: transform.R
+##
+## Authors: Savvas Paragkamian, Christina Kassara
+##
+## Date Created: 2025-07-01
+##
+## Purpose of script:
+## Pure transform functions for the ETL pipeline: combines occurrence
+## sources, assigns EEA grid cells, enriches records with elevation
+## and border distance, applies species-specific distribution and
+## population filters, and builds the final presence datasets.
+## No file I/O; all paths are passed as arguments.
+##
+## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
+
 library(sf)
 library(terra)
 library(units)

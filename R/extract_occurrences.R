@@ -1,3 +1,18 @@
+## Script name: extract_occurrences.R
+##
+## Authors: Savvas Paragkamian, Christina Kassara
+##
+## Date Created: 2024-11-01
+##
+## Purpose of script:
+## One reader function per occurrence data source (GBIF, E1X MDPP,
+## E1X DB sampling, E1X DB references, E2X DB, private records,
+## Unio crassus supplement, Stenobothrus eurasius supplement,
+## NECCA Redlist, national report distribution, Parnassius apollo
+## action plan). All outputs use Darwin Core column names.
+##
+## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
+
 library(readxl)
 library(taxize)
 library(rgbif)

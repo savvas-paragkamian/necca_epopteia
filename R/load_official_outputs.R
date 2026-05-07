@@ -1,3 +1,19 @@
+## Script name: load_official_outputs.R
+##
+## Authors: Savvas Paragkamian, Christina Kassara
+##
+## Date Created: 2025-07-01
+##
+## Purpose of script:
+## TSV writers for the official Article 17 reporting files:
+## combined occurrences, Art. 17 filtered records, final presence
+## dataset, per-species distributions (10 km grid, observed +
+## range), and per-species population counts (1 km grid).
+## Each function returns the written file path for targets
+## format = "file" tracking.
+##
+## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
+
 library(dplyr)
 library(readr)
 library(sf)
