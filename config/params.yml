@@ -23,8 +23,8 @@ inputs:
   e2x_ref_stenobothrus_eurasius: "data/raw/E2X_ref_stenobothrus_eurasius.tsv"
   private_occurrences: "data/raw/Invertebrates_records_private_20250427.csv"
   necca_redlist_points: "data/raw/necca_redlist/points_invertebrates.gpkg"
-  national_report_distribution: "data/spatial/National report_2013_2018_shp/GR_Art17_species_distribution.shp"
-  national_report_distribution_sensitive: "data/spatial/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp"
+  national_report_distribution: "data/raw/National report_2013_2018_shp/GR_Art17_species_distribution.shp"
+  national_report_distribution_sensitive: "data/raw/National report_2013_2018_shp/GR_Art17_species_distribution_sensitive.shp"
   p_apollo_action_plan: "data/raw/Parnassius apollo AP 2019/AP_Papollo_Distribution_LAEA.shp"
 
   greece_regions: "data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp"
