@@ -21,7 +21,8 @@ source("R/extract_occurrences.R")
 source("R/extract_spatial.R")
 source("R/transform_enrichment.R")
 source("R/transform_spatial.R")
-source("R/load_outputs.R")
+source("R/load_maps.R")
+source("R/load_official_outputs.R")
 source("R/qc.R")
 source("R/helper_functions.R")
 
@@ -121,6 +122,30 @@ list(
 
     read_necca_redlist_points_occurrences(a17_config$inputs$necca_redlist_points)
 
-  )
+  ),
+  
+  tar_target(
+    national_report_distribution_occurrences,
+    read_national_report_distribution_occurrences(
+      distribution_path =
+        a17_config$inputs$national_report_distribution,
+  
+      sensitive_distribution_path =
+        a17_config$inputs$national_report_distribution_sensitive,
+  
+      species_taxonomy = species_taxonomy
+    )
+  ),
+
+  tar_target(
+    p_apollo_action_plan_occurrences,
+      read_p_apollo_action_plan_occurrences(
+        path = a17_config$inputs$p_apollo_action_plan,
+        eea_grid_10km = reference_layers$eea_grid_10km
+      )
+    )
 
 )
+
+
+
