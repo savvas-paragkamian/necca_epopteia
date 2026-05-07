@@ -116,6 +116,8 @@ The pipeline consists of 38 targets across three phases.
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
+![Pipeline dependency graph](targets_pipeline_a5_dense.png)
+
 The R functions implementing each phase live in the `R/` directory:
 
 | File | Phase | Role |
