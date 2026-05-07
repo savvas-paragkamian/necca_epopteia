@@ -14,6 +14,15 @@ paths:
 
 inputs:
   taxonomy_curated: "data/raw/species_taxonomy_curated.tsv"
+  gbif_occurrences: "data/raw/gbif_invertebrate_species_occ.tsv"
+  e1x_mdpp: "data/raw/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v8.xlsx"
+  e1x_db: "data/raw/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_ΑΣΠΟΝΔΥΛΑ_20241204.xlsx"
+  e1x_ref: "data/raw/Ε1Χ_ΒΔ_ΒΙΒΛΙΟΓΡΑΦΙΑΣ_ΑΣΠ_20250802.xlsx"
+  e2x_db: "data/raw/E2X_DB.tsv"
+  e2x_ref_unio_crassus: "data/raw/E2X_ref_unio_crassus_complex_supplementary.xlsx"
+  e2x_ref_stenobothrus_eurasius: "data/raw/E2X_ref_stenobothrus_eurasius.tsv"
+  private_occurrences: "data/raw/Invertebrates_records_private_20250427.csv"
+  necca_redlist_points: "data/raw/necca_redlist/points_invertebrates.gpkg"
 
   greece_regions: "data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp"
   eea_grid_1km: "data/spatial/eea_reference_grid/gr_1km.shp"
