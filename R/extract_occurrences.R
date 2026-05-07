@@ -246,6 +246,116 @@ read_necca_redlist_points_occurrences <- function(path) {
     dplyr::mutate(collectionCode = basename(path))
 }
 
+read_national_report_distribution_occurrences <- function(
+  distribution_path,
+  sensitive_distribution_path,
+  species_taxonomy
+) {
+  species_names_combined <- as.character(species_taxonomy$verbatim_name)
 
+  species_dist_national_rep <- sf::st_read(
+    distribution_path,
+    quiet = TRUE
+  )
 
+  species_dist_national_rep_sens <- sf::st_read(
+    sensitive_distribution_path,
+    quiet = TRUE
+  )
 
+  dplyr::bind_rows(
+    species_dist_national_rep,
+    species_dist_national_rep_sens
+  ) |>
+    sf::st_make_valid() |>
+    dplyr::mutate(
+      submittedName = gsub("\\* ?", "", iname),
+      submittedName = gsub(" Complex", "", submittedName),
+      submittedName = gsub(
+        "Osmoderma eremita",
+        "Osmoderma lassallei",
+        submittedName
+      )
+    ) |>
+    dplyr::filter(submittedName %in% species_names_combined) |>
+    dplyr::left_join(
+      species_taxonomy,
+      by = c("submittedName" = "verbatim_name")
+    ) |>
+    dplyr::mutate(
+      species = gsub("Osmoderma eremita", "Osmoderma lassallei", species),
+      species = gsub("Hirudo medicinalis", "Hirudo verbana", species),
+      species = gsub("Unio vicarius", "Unio crassus", species),
+      species = gsub("Unio ionicus", "Unio crassus", species),
+      species = gsub("Unio bruguierianus", "Unio crassus", species),
+      species = gsub("Unio desectus", "Unio crassus", species),
+      species = gsub("Polyommatus eros", "Polyommatus eroides", species),
+      species = gsub("Paracossulus thrips", "Catopta thrips", species),
+      datasetName = "National_report_2013_2018",
+      basisOfRecord = "ESTIMATED_DISTRIBUTION",
+      collectionCode = paste(
+        basename(distribution_path),
+        basename(sensitive_distribution_path),
+        sep = ";"
+      )
+    )
+}
+
+read_p_apollo_action_plan_occurrences <- function(path, eea_grid_10km) {
+
+  p_apollo_dist <- sf::st_read(path, quiet = TRUE) |>
+    dplyr::mutate(
+      datasetName = "Action Plan 2019",
+      basisOfRecord = "ESTIMATED_CENTROID"
+    )
+
+  p_apollo_centroids <- sf::st_centroid(p_apollo_dist)
+  p_apollo_coords <- sf::st_coordinates(p_apollo_centroids)
+
+  p_apollo_eea_coords <- cbind(
+    p_apollo_dist,
+    decimalLongitude = p_apollo_coords[, 1],
+    decimalLatitude = p_apollo_coords[, 2]
+  )
+
+  p_apollo_coords_laea <- p_apollo_eea_coords |>
+    sf::st_drop_geometry() |>
+    sf::st_as_sf(
+      coords = c("decimalLongitude", "decimalLatitude"),
+      remove = TRUE,
+      crs = sf::st_crs(eea_grid_10km)
+    )
+
+  p_apollo_coords_wgs <- sf::st_transform(
+    p_apollo_coords_laea,
+    4326
+  )
+
+  p_apollo_coords_d <- sf::st_coordinates(p_apollo_coords_wgs)
+
+  p_apollo_eea_coords_wgs <- cbind(
+    p_apollo_coords_wgs,
+    decimalLongitude = p_apollo_coords_d[, 1],
+    decimalLatitude = p_apollo_coords_d[, 2]
+  )
+
+  p_apollo_eea_coords_wgs |>
+    sf::st_drop_geometry() |>
+    dplyr::select(
+      -dplyr::any_of(c("EOFORIGIN", "NOFORIGIN"))
+    ) |>
+    dplyr::distinct() |>
+    dplyr::rename(
+      CELLCODE_eea_10km = CELLCODE
+    ) |>
+    dplyr::mutate(
+      recordNumber = paste0(
+        "action_plan_p.apollo_",
+        sprintf("%02d", dplyr::row_number())
+      ),
+      collectionCode = basename(path),
+      species = "Parnassius apollo",
+      individualCount = NA,
+      submittedName = "Parnassius apollo"
+    )
+}
