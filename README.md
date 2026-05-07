@@ -1,306 +1,230 @@
-# Analysis of the invertebrates of Greece
+# Invertebrate monitoring pipeline — Greece, Article 17
 
-This repository contains the scripts for the analysis and visualisation
-of the monitoring of invertebrates as part of the Natura2000 Species 
-directive (Art. 17 under the directive 43/92/ECC). 
+Analysis and reporting pipeline for the monitoring of invertebrates under the
+Natura 2000 Species Directive (Article 17, Directive 92/43/EEC), reporting
+period 2019–2024. Funded by the Natural Environment & Climate Change Agency
+(NECCA/ΟΦΥΠΕΚΑ), October 2024 – July 2025.
 
-This work is funded by the Natural Environment & Climate Change Agency during 
-the period 10-2024 until 07-2025.
+The pipeline integrates occurrence data from 10 sources, enriches records with
+spatial layers (EEA grids, Natura 2000, EU DEM), applies species-specific
+quality filters, computes range estimates, and produces the tabular and
+cartographic outputs required for the EU Art. 17 assessment.
 
 ## Contents
 
 * [Workflow](#workflow)
-* [Species enrichment](#species-enrichment)
-* [Spatial analysis](#spatial-analysis)
-* [Favourable Reference Values](#favourable-reference-values)
-* [Natura2000 targets](#natura2000-targets)
-* [Data validation and quality control](#data-validation-and-quality-control)
-* [NECCA database](#necca-database)
+* [Data inputs](#data-inputs)
+* [Outputs](#outputs)
+* [Species list](#species-list)
 * [Software](#software)
 * [Licence](#licence)
 
+---
 
 ## Workflow
 
+### 1. Setup
 
-```
-git clone https://github.com/savvas-paragkamian/necca_epopteia.git 
+Clone the repository and restore the R environment:
 
+```bash
+git clone https://github.com/savvas-paragkamian/necca_epopteia.git
 cd necca_epopteia
 ```
 
-### Container
-
-In this work we use the podman container which is free and open source,
-follows the Open Container Initiative and is compatible with Docker.
-
-To build the podman container
-
-```
-podman build -t myproj-rgeo:4.5.3 -f .devcontainer/Containerfile .
-
-```
-
-From inside the git repository then enter the container:
-
-```
-podman run --rm -it \
-    --userns=keep-id \
-        -v "$PWD":/workspaces/project:Z \
-        art17-rgeo:4.5.3
-
-```
-
-Specify the memory and cpus for the container, increase because podman
-by defailt allocates a few resourses.
-```
-podman machine stop
-podman machine set --memory 12288 --cpus 5
-podman machine start
-
-```
-
-
-### R Environment
-
-
-The renv tool is used to ensure reproducibility of the computational environment at the R package level by recording the exact versions of all libraries required for the analysis. Within this project, the renv.lock file serves as the reference point for recreating the environment on any system. Upon first use, the user is required to install the renv package and run the command renv::restore(), which automatically installs all necessary dependencies at the specified versions. After any modification to the package set (e.g. adding a new library), the user should run renv::snapshot() to update the lockfile accordingly. This workflow guarantees that the analysis can be consistently reproduced across different computing environments.
-
-
-```
+```r
 renv::restore()
 ```
 
+All package versions are pinned in `renv.lock`. The `.Rprofile` activates
+`renv` automatically on startup.
 
-### ETL Pipeline
+#### Container (recommended for full reproducibility)
 
-![The flowchart of the scripts for the calculation of FRVs](invertebrates_frvs_script_flowchart.png)
-The scripts in this repository are (with the order of execution):
-1. species_enrichment.R
+```bash
+podman build -t myproj-rgeo:4.5.3 -f .devcontainer/Containerfile .
 
-This script facilitates species info and occurrences gathering and homogenisation from multiple
-sources for Greek invertebrates. It starts by importing data from various sources,
-including GBIF, previous monitoring data (E1X MDPP, E1X DB,  E1X reference data),
-IUCN redlist, NECCA redlist and other sources.
-To ensure consistency across datasets, the script standardizes column names 
-based on Darwin Core (e.g., renaming `decimalLongitude`, `decimalLatitude`) and filters out incomplete records.
-The main output of the is species_occurrences_art17_invertebrates.tsv file which 
-contains all data from the aformentioned resources.
-For visualization, the script generates maps for each species, with points colored
-based on their dataset source.
-
-2. spatial_analysis.R, spatial data trimming and final enrichment of species occurrences
-3. frvs_invertebrates_gr.R
-4. N2000_targets_invertebrates_gr.R
-
-The script *data_validation_qc.R* is for the data validation of 
-the data from the current samplings in order to find errors prior to
-submission.
-
-The script *necca_db_standards.R* aims to construct all the data 
-compliled from this work in a compatible form with the NECCA database.
-
-
-## Species enrichment
-
-### Table with invertebrates information
-
-| Name                          | Format            | Content               | Source                              |
-|-------------------------------|------------------|------------------------|-------------------------------------|
-| Species Taxonomy              | Tabular (xlsx)   | Species info           | Manual curation - EIONET            |
-| Directive value               | Tabular (xlsx)   | Species info           | ENVENCO                             |
-| Current value                 | Tabular (xlsx)   | Species info           | Παραδοτέο Ανάδοχου                  |
-| IUCN Red list                 | Tabular (tsv)    | Species info           | IUCN                                |
-| IUCN Red list                 | Tabular (csv)    | Species occurrences    | IUCN                                |
-| NECCA Redlist                 | Tabular (xlsx)   | Species info           | NECCA db                            |
-| NECCA Redlist                 | Tabular (xlsx)   | Species occurrences    | NECCA db                            |
-| Art 17 1.3.1                  | Tabular (xlsx)   | Species info           | EIONET                              |
-| Natura2000_v32                | Access           | Species info           | EIONET                              |
-| Gbif                          | Tabular (tsv)    | Species occurrences    | Gbif                                |
-| ΕΠΟΠΤΕΙΑ Ι                    | Tabular (xlsx)   | Species occurrences    | ENVENCO                             |
-| ΕΠΟΠΤΕΙΑ Ι                    | Tabular (xlsx)   | Species info           | ENVENCO                             |
-| ΟΦΥΠΕΚΑ έργα Μονάδων          | Tabular (xlsx)   | Species occurrences    | NECCA db                            |
-| Edaphobase 2.0                | Tabular (csv)    | Species occurrences    | Edaphobase 2.0                      |
-| National Report 2013-2018     | Shp              | Species info           | ENVENCO                             |
-| Molluscabase                  | ?                | Species occurrences    | [molluscabase.org](https://www.molluscabase.org/) |
-| Worms Traits                  | Tabular (tsv)    | Species info           |                                     |
-| Genetic diversity             |                  |                        |                                     |
-| Species threats?              |                  |                        |                                     |
-
-### Invertebrate species of Annex II of article 17 for the Natura2000 
-
-Apatura metis
-Astacus astacus
-Austropotamobius torrentium
-Bolbelasmus unicornis
-Buprestis splendens
-Catopta thrips
-Cerambyx cerdo
-Coenagrion ornatum
-Cordulegaster heros
-Dioszeghyana schmidtii
-Eriogaster catax
-Euphydryas aurinia
-Euplagia quadripunctaria
-Hyles hippophaes
-Lindenia tetraphylla
-Lucanus cervus
-Lycaena dispar
-Maculinea arion
-Ophiogomphus cecilia
-Papilio alexanor
-Paracaloptenus caloptenoides
-Parnassius apollo
-Parnassius mnemosyne
-Polyommatus eroides
-Probaticus subrugosus
-Proserpinus proserpina
-Pseudophilotes bavius
-Rhysodes sulcatus
-Rosalia alpina
-Stenobothrus eurasius
-Stylurus flavipes
-Unio crassus
-Unio elongatulus
-Vertigo angustior
-Vertigo moulinsiana
-Zerynthia polyxena
-Morimus asper funereus
-Osmoderma eremita Complex
-Hirudo verbana
-
-
-Endemic species and critically endangered are also studied in order to include
-them in future analyses.
-
-### IUCN Redlist
-
-Search in the website for the following:
-Taxonomy: Annelida - PhylumRemoveArthropoda - PhylumRemoveCnidaria - PhylumRemoveEchinodermata - PhylumRemoveMollusca - PhylumRemovePorifera - PhylumRemove
-Land Regions: Greece
-Include: Species
-
-Didn't have any points data for the invertrebrate species of art 17.
-
-
-Another search with redlist_species_data_f4d05b4d-bdbd-4b10-8c67-1523dffd9d0e id.
-
-Geographical Scope: Global
-Land Regions: Greece
-Include: Species
-
-All the data available from iunc Search on 2024-10-30 at 08:47:29
-
-```
-gawk -F"," '(NR>1){a[$3]++}END{for (i in a){print i "\t" a[i]}}' points_data.csv | sort -n -k 3
+podman run --rm -it \
+    --userns=keep-id \
+    -v "$PWD":/workspaces/project:Z \
+    myproj-rgeo:4.5.3
 ```
 
-614 species with points data with 753110 occurrences.
+Increase resources if needed:
 
-This database doesn't have any occurrences of the species of interest. 
-
-### GBIF database 
-
-Here we retrieve all the occurrences of the species from GBIF.
-
-### Edaphobase 2.0
-The download is manual with a registered account. Once the download is finished
-the user can filter based on species or country or some other field. Here we first
-filtered with country code of Greece to create a new file to further analyse it in R script.
-
-```
-gawk -F";" '(NR==1 || $7~"Greece"){print $0}' 2025-02-26-edaphobase-export.csv > 2025-02-26-edaphobase-export_GR.csv
+```bash
+podman machine stop
+podman machine set --memory 12288 --cpus 5
+podman machine start
 ```
 
-This database doesn't have any occurrences of the species of interest. 
+### 2. Configuration
 
-## Spatial analysis
+All input and output file paths are declared in `config/params.yml`. No paths
+are hardcoded in the R source files.
 
-### Table with spatial data
+### 3. Running the pipeline
 
-| Name                             | Format| Content                          | Source                        |
-|----------------------------------|-------|-------------------------------------|-----------------------------|
-| Natura 2000 Habitat types        | shp   | habitat                             | Κτηματολόγιο (ΕΚΧΑ)        |
-| Natura 2000 vegetation types     | shp   | vegetation                          | Διεύθυνση δασών            |
-| Corine Land Cover                | shp   | Land use                            | EEA                         |
-| Natura2000                       | shp   | Natura2000 polygons                 | EIONET                      |
-| EAA grid                         | shp   | 1km², 10km²                          | EEA                         |
-| Digital Elevation model         | tiff  |                                     | EEA                         |
-| Slope                            |       |                                     |                             |
-| Exposure                         |       |                                     |                             |
-| Springs                          |       | ?                                   | ?                           |
-| WorldClim                        | tiff  |                                     | WorldClim 2.0              |
-| GlobCover                        | ?     |                                     | ?                           |
-| HildaPlus                        | tiff  | Land cover change from 1960         |                             |
-| Gadm                             | shp   | Administrative units                | Gadm                        |
-| Υδρογραφικό δίκτυο Ελλάδα       | shp   |                                     | ?                           |
-| Natura2000 threats               | ?     |                                     |                             |
-| Elstat                           |       |                                     |                             |
+The pipeline is implemented with the `{targets}` package. The full
+Extract → Transform → Load chain runs in a single command:
 
-### Natura2000
-
-The MS access database has the schema of EEA Natura2000 in access format.
-
-To retrieve each table run the following 
-
-```
-mdb-export -d "\t" Natura2000DB_V32.mdb other_species > Natura2000DB_V32_other_species.tsv
+```r
+targets::tar_make()
 ```
 
-The [EEA Natura2000 data](https://www.eea.europa.eu/data-and-maps/data/natura-14/natura-2000-tabular-data-12-tables/#SPECIES).
+Targets caches each intermediate result. Only outdated targets re-run when
+inputs change. Other useful commands:
 
-### DEM
+```r
+targets::tar_visnetwork()          # visualise the dependency graph
+targets::tar_read(species_range)   # inspect any cached target
+targets::tar_outdated()            # list targets that need to re-run
+targets::tar_make(par_type = "future")  # parallel execution
+```
 
-* digital elevation model over Europe (EU-DEM) [eurostat DEM](https://ec.europa.eu/eurostat/web/gisco/geodata/digital-elevation-model/eu-dem#DD)
-* slope, aspect
+### 4. Pipeline structure
 
-### Slope
+The pipeline consists of 38 targets across three phases.
 
-## Favourable Reference Values
+```
+┌─ Extract ──────────────────────────────────────────────────────────────────┐
+│  a17_config · spatial_layers · species_taxonomy                            │
+│  10 × read_*_occurrences() targets (run independently)                     │
+└────────────────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─ Transform ────────────────────────────────────────────────────────────────┐
+│  national_report_distribution_grid                                         │
+│  species_occurrences_invertebrates                                         │
+│    → species_samples_art17 → species_samples_eea                           │
+│    → species_samples_presence_minimum                                      │
+│    → species_samples_presence_elevation                                    │
+│    → species_samples_presence_border                                       │
+│    → species_samples_presence_dist_flags                                   │
+│    → species_samples_presence_pop                                          │
+│    → species_samples_presence_final / _final_private                       │
+└────────────────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─ Load ─────────────────────────────────────────────────────────────────────┐
+│  Maps:    map_borders_quality · map_natura_base · map_art17_overview       │
+│           maps_species_occurrences · maps_species_range                    │
+│           maps_species_distribution · file_species_range_shp               │
+│  TSVs:    file_occurrences_invertebrates · file_art17_all                  │
+│           file_presence_final · file_distributions_final                   │
+│           file_populations_final                                           │
+└────────────────────────────────────────────────────────────────────────────┘
+```
 
-The paper: *Defining applying the concept of Favourable Reference Values for species and habitats*
-defines the FRVs.
+The R functions implementing each phase live in the `R/` directory:
 
-### MaxEnt
+| File | Phase | Role |
+|------|-------|------|
+| `extract_occurrences.R` | Extract | One reader function per data source |
+| `extract_spatial.R` | Extract | Loads spatial reference layers |
+| `helper_functions.R` | Extract/Transform | Spatial utilities (range expansion, raster extraction) |
+| `transform.R` | Transform | All enrichment, filtering and flag-assignment functions |
+| `load_maps.R` | Load | Map generation per species and overview maps |
+| `load_official_outputs.R` | Load | TSV writers for official Art. 17 reporting files |
+| `qc.R` | QC | Quality control (stub — under development) |
 
-The following variables are used mostly: 
-* Altitude
-* Slope
-* Aspect
-* Annual Mean Temperature
-* Temperature Seasonality
-* Mean Temp of Wettest Quarter
-* Annual Precipitation
-* Precipitation Seasonality
-* Precipitation of Warmest Quarter
+---
 
-## Natura2000 targets
+## Data inputs
 
-## Data validation and quality control
+### Occurrence data (`data/raw/`)
 
-## NECCA database
+| Source | Format | Content |
+|--------|--------|---------|
+| GBIF | TSV | Occurrences, filtered to Greece, coordinate uncertainty < 1 000 m |
+| E1X MDPP 2014–2024 | XLSX | Field monitoring samples |
+| E1X DB sampling | XLSX | Structured sampling records |
+| E1X DB references | XLSX | Bibliographic reference records |
+| E2X DB | TSV | Occurrence database |
+| E2X ref — *Unio crassus* complex | XLSX | Supplementary freshwater mussel records |
+| E2X ref — *Stenobothrus eurasius* | TSV | Supplementary grasshopper records |
+| Private records | CSV | Partner-contributed field records |
+| NECCA Redlist | GeoPackage | NECCA redlist point occurrences |
+| National report 2013–2018 | SHP | Previous Art. 17 distribution grid (standard + sensitive) |
+| *Parnassius apollo* Action Plan 2019 | SHP | Species-specific distribution grid |
 
-It is under development from AUTH. There is a script under development for the 
-standardisation of data in order to be uploaded to NECCA database.
+All occurrence sources are standardised to Darwin Core column names
+(`submittedName`, `decimalLatitude`, `decimalLongitude`, `datasetName`,
+`recordNumber`, `collectionCode`, `basisOfRecord`, `individualCount`).
+
+### Spatial reference layers (`data/spatial/`)
+
+| Layer | Format | Use |
+|-------|--------|-----|
+| Greece administrative boundaries (GADM 4.1) | SHP | Point filtering, border-distance calculation |
+| EEA reference grid 1 km | SHP | Population-level assessment |
+| EEA reference grid 10 km | SHP | Art. 17 distribution reporting |
+| Natura 2000 (v32, 2021) | SHP | Site assignment, background maps |
+| EU DEM (ETRS89-LAEA, 3035) | GeoTIFF | Elevation extraction, species-specific altitude filters |
+
+---
+
+## Outputs
+
+All output paths are declared in `config/params.yml`.
+
+| File | Location | Content |
+|------|----------|---------|
+| `species_occurrences_invertebrates.tsv` | `data/derived/` | All occurrence records combined |
+| `species_samples_art17_all.tsv` | `data/derived/` | Records filtered to Annex II species |
+| `species_samples_presence_final.tsv` | `results/` | Final presence dataset (no private records) |
+| `distributions_presence_final.tsv` | `results/` | Per-species, per-10 km-cell distribution (observed + range) |
+| `populations_presence_final.tsv` | `results/` | Per-species, per-1 km-cell population counts |
+| `species_range/species_range.shp` | `results/` | Computed range polygons for all species |
+| `maps/map_natura.png` | `results/maps/` | Natura 2000 overview map |
+| `maps/map_art17_invertebrates_natura.png` | `results/maps/` | All Art. 17 occurrences on Natura 2000 |
+| `maps/map_occurrences_borders_filtering.png` | `results/maps/` | QC map: points relative to Greece borders |
+| `maps/species_maps/map_*_occurrences.png` | `results/maps/` | Per-species occurrence map |
+| `maps/species_maps/map_*_range.png` | `results/maps/` | Per-species range map |
+| `maps/species_maps/map_*_distribution.png` | `results/maps/` | Per-species distribution map (sample density) |
+
+---
+
+## Species list
+
+39 invertebrate taxa of Annex II assessed in this pipeline:
+
+*Apatura metis* · *Astacus astacus* · *Austropotamobius torrentium* ·
+*Bolbelasmus unicornis* · *Buprestis splendens* · *Catopta thrips* ·
+*Cerambyx cerdo* · *Coenagrion ornatum* · *Cordulegaster heros* ·
+*Dioszeghyana schmidtii* · *Eriogaster catax* · *Euphydryas aurinia* ·
+*Euplagia quadripunctaria* · *Hirudo verbana* · *Hyles hippophaes* ·
+*Lindenia tetraphylla* · *Lucanus cervus* · *Lycaena dispar* ·
+*Maculinea arion* · *Morimus asper funereus* · *Ophiogomphus cecilia* ·
+*Osmoderma eremita* Complex · *Papilio alexanor* ·
+*Paracaloptenus caloptenoides* · *Parnassius apollo* · *Parnassius mnemosyne* ·
+*Polyommatus eroides* · *Probaticus subrugosus* · *Proserpinus proserpina* ·
+*Pseudophilotes bavius* · *Rhysodes sulcatus* · *Rosalia alpina* ·
+*Stenobothrus eurasius* · *Stylurus flavipes* · *Unio crassus* ·
+*Unio elongatulus* · *Vertigo angustior* · *Vertigo moulinsiana* ·
+*Zerynthia polyxena*
+
+---
 
 ## Software
 
-R version 4.4.3 (2025-02-28) with the packages:
-* tidyr_1.3.1
-* tibble_3.2.1
-* ggplot2_3.5.1 
-* readr_2.1.5
-* purrr_1.0.2 
-* dplyr_1.1.4
-* readxl_1.4.3
-* rgbif_3.8.1
-* vegan_2.6-10
-* taxize_0.10.0
-* terra_1.8-15
-* sf_1.0-19
+R 4.5.3 managed via `renv`. Key packages:
 
-GNU Awk 5.3.1
+| Package | Version | Role |
+|---------|---------|------|
+| targets | 1.12.0 | Pipeline orchestration |
+| tarchetypes | 0.14.1 | Pipeline helpers |
+| sf | 1.0-19 | Vector spatial data |
+| terra | 1.8-15 | Raster spatial data |
+| dplyr / tidyr / purrr | tidyverse | Data wrangling |
+| ggplot2 | 3.5.1 | Mapping |
+| readxl | 1.4.3 | Excel ingestion |
+| rgbif | 3.8.1 | GBIF data access |
+| taxize | 0.10.0 | Taxonomic harmonisation |
+| yaml | — | Configuration parsing |
+
+---
 
 ## Licence
 
-GNU GPLv3 license (for 3rd party scripts separate licenses apply).
+GNU GPLv3 licence. For third-party data and scripts, separate licences apply.
