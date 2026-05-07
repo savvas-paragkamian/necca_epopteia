@@ -37,7 +37,7 @@ outputs:
   species_occurrences_invertebrates: "data/derived/species_occurrences_invertebrates.tsv"
   species_samples_art17_all: "data/derived/species_samples_art17_all.tsv"
 
-  species_samples_presence_final: "results/species_samples_presence_final.tsv"
-  distributions_presence_final: "results/distributions_presence_final.tsv"
-  populations_presence_final: "results/populations_presence_final.tsv"
+  species_samples_presence_final: "results/official/species_samples_presence_final.tsv"
+  distributions_presence_final: "results/official/distributions_presence_final.tsv"
+  populations_presence_final: "results/official/populations_presence_final.tsv"
   maps_dir: "results/maps"
