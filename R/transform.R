@@ -167,7 +167,9 @@ build_presence_minimum <- function(
     dplyr::select(-composite_key)
 }
 
-enrich_with_elevation <- function(species_samples_presence_minimum, eu_dem) {
+enrich_with_elevation <- function(species_samples_presence_minimum, eu_dem_path) {
+  eu_dem <- terra::rast(eu_dem_path)
+
   presence_sf <- species_samples_presence_minimum |>
     sf::st_as_sf(
       coords = c("decimalLongitude", "decimalLatitude"),

@@ -200,7 +200,7 @@ list(
     species_samples_presence_elevation,
     enrich_with_elevation(
       species_samples_presence_minimum = species_samples_presence_minimum,
-      eu_dem                           = spatial_layers$eu_dem
+      eu_dem_path                      = a17_config$inputs$eu_dem
     )
   ),
 
