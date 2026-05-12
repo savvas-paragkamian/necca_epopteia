@@ -1,5 +1,7 @@
 # Invertebrate monitoring pipeline — Greece, Article 17
 
+> 🇬🇷 [Διαβάστε αυτό στα ελληνικά](README_GR.md)
+
 Analysis and reporting pipeline for the monitoring of invertebrates under the
 Natura 2000 Species Directive (Article 17, Directive 92/43/EEC), reporting
 period 2019–2024. Funded by the Natural Environment & Climate Change Agency
@@ -18,6 +20,9 @@ cartographic outputs required for the EU Art. 17 assessment.
 * [Species list](#species-list)
 * [Software](#software)
 * [Licence](#licence)
+
+**Detailed user guides:**
+[English wiki](WIKI_EN.md) · [Ελληνικό εγχειρίδιο](WIKI.md)
 
 ---
 
