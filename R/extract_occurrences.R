@@ -219,7 +219,7 @@ read_unio_crassus_occurrences <- function(path) {
     ) |>
     dplyr::mutate(
       submittedName = gsub("U.", "Unio", submittedName),
-      datasetName = "E2X_ref",
+      datasetName = "E2X_DB_references",
       collectionCode = basename(path),
       recordNumber = paste0("Lopes-Lima_2024_", sprintf("%02d", dplyr::row_number())),
       basisOfRecord = "MaterialCitation"

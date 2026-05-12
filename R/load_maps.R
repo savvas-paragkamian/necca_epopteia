@@ -24,7 +24,7 @@ library(ggnewscale)
   "E1X_MDPP_2014_2024"   = "#FDF79C",
   "E1X_DB"               = "#2BA09F",
   "E2X_DB"               = "maroon1",
-  "db_refs_necca_2025"   = "green1",
+  "E2X_DB_references"   = "green1",
   "E1X_DB_references"    = "#141D43",
   "DistrMap_2013_2018"   = "darkorchid1",
   "Action Plan 2019"     = "#F85C29"
@@ -117,15 +117,14 @@ save_natura_base_map <- function(greece_regions, natura2000, path) {
 }
 
 save_art17_overview_map <- function(
-  species_samples_presence_pop,
+  species_samples_presence_final_sf,
   greece_regions,
   natura2000,
   path
 ) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
 
-  presence_sf <- species_samples_presence_pop |>
-    dplyr::filter(datasetName != "Invertebrates_records_private")
+  presence_sf <- species_samples_presence_final_sf
 
   g <- .build_base_n2000_plot(
     greece_regions_etrs89 = sf::st_transform(greece_regions, 3035),
@@ -150,7 +149,7 @@ save_art17_overview_map <- function(
 }
 
 save_species_occurrence_maps <- function(
-  species_samples_presence_pop,
+  species_samples_presence_final_sf,
   greece_regions,
   natura2000,
   maps_dir
@@ -163,8 +162,7 @@ save_species_occurrence_maps <- function(
     natura2000_etrs89     = sf::st_transform(natura2000, 3035)
   )
 
-  presence_sf  <- dplyr::filter(species_samples_presence_pop,
-                                datasetName != "Invertebrates_records_private")
+  presence_sf  <- species_samples_presence_final_sf
   species_list <- sort(unique(presence_sf$species))
 
   paths <- vapply(species_list, function(sp) {
@@ -202,20 +200,16 @@ save_species_occurrence_maps <- function(
   unname(paths)
 }
 
-compute_species_range <- function(species_samples_presence_pop, eea_grid_10km) {
+compute_species_range <- function(species_samples_presence_final, eea_grid_10km) {
   eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
 
-  presence_sf <- species_samples_presence_pop |>
-    dplyr::filter(
-      datasetName != "Invertebrates_records_private",
-      includeDistribution == TRUE
-    )
+  presence <- dplyr::filter(species_samples_presence_final,
+                             includeDistribution == TRUE)
 
-  species_list <- sort(unique(presence_sf$species))
+  species_list <- sort(unique(presence$species))
 
   range_list <- lapply(species_list, function(sp) {
-    sp_cells <- presence_sf |>
-      sf::st_drop_geometry() |>
+    sp_cells <- presence |>
       dplyr::filter(species == sp) |>
       dplyr::distinct(CELLCODE_eea_10km) |>
       dplyr::rename(CELLCODE = CELLCODE_eea_10km)
@@ -234,7 +228,7 @@ compute_species_range <- function(species_samples_presence_pop, eea_grid_10km) {
 
 save_species_range_maps <- function(
   species_range,
-  species_samples_presence_pop,
+  species_samples_presence_final_sf,
   greece_regions,
   natura2000,
   maps_dir
@@ -247,8 +241,7 @@ save_species_range_maps <- function(
     natura2000_etrs89     = sf::st_transform(natura2000, 3035)
   )
 
-  presence_sf        <- dplyr::filter(species_samples_presence_pop,
-                                      datasetName != "Invertebrates_records_private")
+  presence_sf        <- species_samples_presence_final_sf
   colors_cell_origin <- c("range" = "mediumvioletred", "distribution" = "limegreen")
   species_list       <- sort(unique(species_range$species))
 
@@ -304,7 +297,7 @@ save_species_range_shp <- function(species_range, path) {
 }
 
 save_species_distribution_maps <- function(
-  species_samples_presence_pop,
+  species_samples_presence_final_sf,
   eea_grid_10km,
   greece_regions,
   natura2000,
@@ -319,8 +312,7 @@ save_species_distribution_maps <- function(
     natura2000_etrs89     = sf::st_transform(natura2000, 3035)
   )
 
-  presence_sf  <- dplyr::filter(species_samples_presence_pop,
-                                datasetName != "Invertebrates_records_private")
+  presence_sf  <- species_samples_presence_final_sf
   species_list <- sort(unique(presence_sf$species))
 
   paths <- vapply(species_list, function(sp) {

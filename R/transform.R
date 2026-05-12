@@ -274,3 +274,8 @@ build_presence_final <- function(species_samples_presence_pop) {
 build_presence_final_private <- function(species_samples_presence_pop) {
   sf::st_drop_geometry(species_samples_presence_pop)
 }
+
+build_presence_final_sf <- function(species_samples_presence_pop) {
+  dplyr::filter(species_samples_presence_pop,
+                datasetName != "Invertebrates_records_private")
+}

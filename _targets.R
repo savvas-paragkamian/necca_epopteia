@@ -255,6 +255,13 @@ list(
     )
   ),
 
+  tar_target(
+    species_samples_presence_final_sf,
+    build_presence_final_sf(
+      species_samples_presence_pop = species_samples_presence_pop
+    )
+  ),
+
   # --- Load (Maps) ---
 
   tar_target(
@@ -282,9 +289,9 @@ list(
   tar_target(
     map_art17_overview,
     save_art17_overview_map(
-      species_samples_presence_pop = species_samples_presence_pop,
-      greece_regions               = spatial_layers$greece_regions,
-      natura2000                   = spatial_layers$natura2000,
+      species_samples_presence_final_sf = species_samples_presence_final_sf,
+      greece_regions                    = spatial_layers$greece_regions,
+      natura2000                        = spatial_layers$natura2000,
       path = file.path(a17_config$paths$maps_dir,
                        "map_art17_invertebrates_natura.png")
     ),
@@ -294,10 +301,10 @@ list(
   tar_target(
     maps_species_occurrences,
     save_species_occurrence_maps(
-      species_samples_presence_pop = species_samples_presence_pop,
-      greece_regions               = spatial_layers$greece_regions,
-      natura2000                   = spatial_layers$natura2000,
-      maps_dir                     = a17_config$paths$maps_dir
+      species_samples_presence_final_sf = species_samples_presence_final_sf,
+      greece_regions                    = spatial_layers$greece_regions,
+      natura2000                        = spatial_layers$natura2000,
+      maps_dir                          = a17_config$paths$maps_dir
     ),
     format = "file"
   ),
@@ -305,19 +312,19 @@ list(
   tar_target(
     species_range,
     compute_species_range(
-      species_samples_presence_pop = species_samples_presence_pop,
-      eea_grid_10km                = spatial_layers$eea_grid_10km
+      species_samples_presence_final = species_samples_presence_final,
+      eea_grid_10km                  = spatial_layers$eea_grid_10km
     )
   ),
 
   tar_target(
     maps_species_range,
     save_species_range_maps(
-      species_range                = species_range,
-      species_samples_presence_pop = species_samples_presence_pop,
-      greece_regions               = spatial_layers$greece_regions,
-      natura2000                   = spatial_layers$natura2000,
-      maps_dir                     = a17_config$paths$maps_dir
+      species_range                     = species_range,
+      species_samples_presence_final_sf = species_samples_presence_final_sf,
+      greece_regions                    = spatial_layers$greece_regions,
+      natura2000                        = spatial_layers$natura2000,
+      maps_dir                          = a17_config$paths$maps_dir
     ),
     format = "file"
   ),
@@ -335,11 +342,11 @@ list(
   tar_target(
     maps_species_distribution,
     save_species_distribution_maps(
-      species_samples_presence_pop = species_samples_presence_pop,
-      eea_grid_10km                = spatial_layers$eea_grid_10km,
-      greece_regions               = spatial_layers$greece_regions,
-      natura2000                   = spatial_layers$natura2000,
-      maps_dir                     = a17_config$paths$maps_dir
+      species_samples_presence_final_sf = species_samples_presence_final_sf,
+      eea_grid_10km                     = spatial_layers$eea_grid_10km,
+      greece_regions                    = spatial_layers$greece_regions,
+      natura2000                        = spatial_layers$natura2000,
+      maps_dir                          = a17_config$paths$maps_dir
     ),
     format = "file"
   ),
