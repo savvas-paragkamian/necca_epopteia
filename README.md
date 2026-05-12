@@ -124,11 +124,75 @@ The R functions implementing each phase live in the `R/` directory:
 |------|-------|------|
 | `extract_occurrences.R` | Extract | One reader function per data source |
 | `extract_spatial.R` | Extract | Loads spatial reference layers |
-| `helper_functions.R` | Extract/Transform | Spatial utilities (range expansion, raster extraction) |
+| `helper_functions.R` | Preparation / Extract / Transform | Spatial utilities (range expansion, raster extraction); GBIF download helpers; one-time raster preparation tools (crop EU DEM to Greece) |
 | `transform.R` | Transform | All enrichment, filtering and flag-assignment functions |
 | `load_maps.R` | Load | Map generation per species and overview maps |
 | `load_official_outputs.R` | Load | TSV writers for official Art. 17 reporting files |
 | `qc.R` | QC | Quality control (stub — under development) |
+
+---
+
+## Data preparation
+
+Before running the pipeline for the first time, two one-time preparation steps
+are required. Helper functions in `R/helper_functions.R` automate both.
+
+### Downloading GBIF occurrences
+
+GBIF credentials must be stored in `~/.Renviron` (`GBIF_USER`, `GBIF_PWD`,
+`GBIF_EMAIL`). Run interactively in R:
+
+```r
+source("R/helper_functions.R")
+source("R/extract_occurrences.R")
+
+# Resolve species names → GBIF taxon keys
+keys <- get_gbif_taxon_keys(species_names_combined)
+
+# Submit download request (returns a download key)
+key <- request_gbif_download(keys, country = "GR")
+
+# Wait for completion and save (can take several minutes)
+import_gbif_download(key, output_path = "data/raw/gbif_invertebrate_species_occ.tsv")
+```
+
+Or as a single call:
+
+```r
+download_gbif_occurrences(
+  species_names = species_names_combined,
+  output_path   = "data/raw/gbif_invertebrate_species_occ.tsv"
+)
+```
+
+### Cropping large rasters to Greece
+
+The full EU DEM mosaic (~20 GB, EPSG:3035) must be cropped to Greece before the
+pipeline can use it. The cropped file is what `config/params.yml` points to.
+
+```r
+source("R/helper_functions.R")
+source("R/extract_spatial.R")
+
+greece_regions <- sf::st_read("data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp")
+
+crop_eu_dem_to_greece(
+  eu_dem_path    = "/path/to/full/eudem_dem_3035_europe.tif",
+  greece_regions = greece_regions,
+  output_path    = "data/spatial/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif"
+)
+```
+
+For any other large raster (WorldClim, CORINE, etc.) use the general function:
+
+```r
+crop_raster_to_extent(
+  raster_path = "/path/to/source.tif",
+  extent_sf   = greece_regions,
+  output_path = "data/spatial/output/cropped.tif",
+  target_crs  = 3035   # NULL to keep source CRS
+)
+```
 
 ---
 

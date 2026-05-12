@@ -126,11 +126,77 @@ targets::tar_make(par_type = "future")  # παράλληλη εκτέλεση
 |--------|------|-------|
 | `extract_occurrences.R` | Εξαγωγή | Μία συνάρτηση ανάγνωσης ανά πηγή δεδομένων |
 | `extract_spatial.R` | Εξαγωγή | Φόρτωση χωρικών επιπέδων αναφοράς |
-| `helper_functions.R` | Εξαγωγή/Μετασχηματισμός | Βοηθητικές χωρικές συναρτήσεις (εκτίμηση εύρους, εξαγωγή raster) |
+| `helper_functions.R` | Προετοιμασία / Εξαγωγή / Μετασχηματισμός | Βοηθητικές χωρικές συναρτήσεις (εκτίμηση εύρους, εξαγωγή raster)· βοηθητικές συναρτήσεις λήψης GBIF· εργαλεία μίας-χρήσης για προετοιμασία rasters (περικοπή EU DEM στην Ελλάδα) |
 | `transform.R` | Μετασχηματισμός | Εμπλουτισμός, φιλτράρισμα και ανάθεση σημαιών |
 | `load_maps.R` | Φόρτωση | Παραγωγή χαρτών ανά είδος και συνολικών χαρτών |
 | `load_official_outputs.R` | Φόρτωση | Εγγραφή αρχείων TSV για επίσημη αναφορά Άρθρου 17 |
 | `qc.R` | Ποιοτικός έλεγχος | Ποιοτικός έλεγχος (υπό ανάπτυξη) |
+
+---
+
+## Προετοιμασία δεδομένων
+
+Πριν την πρώτη εκτέλεση του αγωγού απαιτούνται δύο βήματα μίας-χρήσης.
+Βοηθητικές συναρτήσεις στο `R/helper_functions.R` τα αυτοματοποιούν.
+
+### Λήψη καταγραφών GBIF
+
+Τα διαπιστευτήρια GBIF πρέπει να αποθηκευτούν στο `~/.Renviron`
+(`GBIF_USER`, `GBIF_PWD`, `GBIF_EMAIL`). Εκτελέστε διαδραστικά σε R:
+
+```r
+source("R/helper_functions.R")
+source("R/extract_occurrences.R")
+
+# Επίλυση ονομάτων ειδών → κλειδιά GBIF
+keys <- get_gbif_taxon_keys(species_names_combined)
+
+# Υποβολή αιτήματος λήψης (επιστρέφει κλειδί λήψης)
+key <- request_gbif_download(keys, country = "GR")
+
+# Αναμονή ολοκλήρωσης και αποθήκευση
+import_gbif_download(key, output_path = "data/raw/gbif_invertebrate_species_occ.tsv")
+```
+
+Ή ως ενιαία κλήση:
+
+```r
+download_gbif_occurrences(
+  species_names = species_names_combined,
+  output_path   = "data/raw/gbif_invertebrate_species_occ.tsv"
+)
+```
+
+### Περικοπή μεγάλων rasters στην Ελλάδα
+
+Το πλήρες EU DEM mosaic (~20 GB, EPSG:3035) πρέπει να περικοπεί στα όρια
+της Ελλάδας πριν τη χρήση του από τον αγωγό. Το περικομμένο αρχείο είναι
+αυτό που αναφέρεται στο `config/params.yml`.
+
+```r
+source("R/helper_functions.R")
+source("R/extract_spatial.R")
+
+greece_regions <- sf::st_read("data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp")
+
+crop_eu_dem_to_greece(
+  eu_dem_path    = "/path/to/full/eudem_dem_3035_europe.tif",
+  greece_regions = greece_regions,
+  output_path    = "data/spatial/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif"
+)
+```
+
+Για οποιοδήποτε άλλο μεγάλο raster (WorldClim, CORINE κτλ.) χρησιμοποιήστε
+τη γενική συνάρτηση:
+
+```r
+crop_raster_to_extent(
+  raster_path = "/path/to/source.tif",
+  extent_sf   = greece_regions,
+  output_path = "data/spatial/output/cropped.tif",
+  target_crs  = 3035   # NULL για διατήρηση του αρχικού CRS
+)
+```
 
 ---
 
