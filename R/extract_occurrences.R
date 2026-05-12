@@ -197,16 +197,6 @@ read_private_occurrences <- function(path) {
     dplyr::mutate(datasetName = "Invertebrates_records_private") |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE") |>
     dplyr::mutate(recordNumber = as.character(ID)) |>
-    dplyr::bind_rows(
-      tibble::tibble(
-        submittedName = "Cerambyx cerdo",
-        decimalLatitude = 38.077228,
-        decimalLongitude = 24.380490,
-        datasetName = "Invertebrates_records_private",
-        recordNumber = "157",
-        basisOfRecord = "MATERIAL_SAMPLE"
-      )
-    ) |>
     dplyr::mutate(collectionCode = basename(path))
 }
 
