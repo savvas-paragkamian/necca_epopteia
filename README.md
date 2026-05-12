@@ -22,7 +22,7 @@ cartographic outputs required for the EU Art. 17 assessment.
 * [Licence](#licence)
 
 **Detailed user guides:**
-[English wiki](WIKI_EN.md) · [Ελληνικό εγχειρίδιο](WIKI.md)
+[English wiki](WIKI_EN.md) · [Ελληνικό εγχειρίδιο](WIKI_GR.md)
 
 ---
 
