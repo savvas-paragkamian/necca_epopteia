@@ -43,10 +43,10 @@ build_national_report_distribution_grid_occurrences <- function(
     dplyr::distinct(submittedName, species, CELLCODE, decimalLongitude, decimalLatitude) |>
     dplyr::rename(CELLCODE_eea_10km = CELLCODE) |>
     dplyr::mutate(
-      datasetName    = "DistrMap_2013_2018",
+      collectionCode    = "DistrMap_2013_2018",
       basisOfRecord  = "ESTIMATED_CENTROID",
       recordNumber   = paste0("DistrMap_2013_2018_", sprintf("%04d", dplyr::row_number())),
-      collectionCode = "GR_Art17_species_distribution.shp",
+      datasetName = "GR_Art17_species_distribution.shp",
       DistrMap_2013_2018 = TRUE
     )
 
@@ -107,8 +107,8 @@ assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
 
   species_samples_art17 |>
     dplyr::filter(!is.na(decimalLatitude)) |>
-    dplyr::distinct(submittedName, decimalLatitude, decimalLongitude, datasetName,
-                    collectionCode, recordNumber, basisOfRecord, individualCount, species) |>
+    dplyr::distinct(submittedName, decimalLatitude, decimalLongitude, collectionCode,
+                    datasetName, recordNumber, basisOfRecord, individualCount, species) |>
     dplyr::group_by(dplyr::across(-recordNumber)) |>
     dplyr::summarise(recordNumber = stringr::str_c(recordNumber, collapse = ", "),
                      .groups = "keep") |>
@@ -132,8 +132,8 @@ assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
     sf::st_join(eea_10km_etrs89) |>
     sf::st_drop_geometry() |>
     dplyr::rename(CELLCODE_eea_10km = CELLCODE) |>
-    dplyr::distinct(submittedName, decimalLatitude, decimalLongitude, datasetName,
-                    collectionCode, recordNumber, basisOfRecord, individualCount,
+    dplyr::distinct(submittedName, decimalLatitude, decimalLongitude, collectionCode,
+                    datasetName, recordNumber, basisOfRecord, individualCount,
                     CELLCODE_eea_10km, species)
 }
 
@@ -170,7 +170,7 @@ build_presence_minimum <- function(
 
   # Orphan cells: in national report but absent from non-GBIF point data
   samples_no_gbif_keys <- species_samples_combined_dist |>
-    dplyr::filter(datasetName != "GBIF") |>
+    dplyr::filter(collectionCode != "GBIF") |>
     dplyr::pull(composite_key) |>
     unique()
 
@@ -217,10 +217,10 @@ apply_distribution_filters <- function(species_samples_presence_etrs89) {
     ) |>
     dplyr::mutate(includeDistribution = TRUE) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
-      datasetName == "GBIF",
+      collectionCode == "GBIF",
       FALSE, includeDistribution)) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
-      datasetName == "E1X_DB_references" & !DistrMap_2013_2018,
+      collectionCode == "E1X_DB_references" & !DistrMap_2013_2018,
       FALSE, includeDistribution)) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
       species == "Zerynthia cretica",
@@ -241,13 +241,13 @@ apply_distribution_filters <- function(species_samples_presence_etrs89) {
       species == "Pseudophilotes bavius" & CELLCODE_eea_10km == "10kmE535N176",
       FALSE, includeDistribution)) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
-      species == "Parnassius apollo" & eudem_dem_3035_europe <= 450 & datasetName != "Action Plan 2019",
+      species == "Parnassius apollo" & eudem_dem_3035_europe <= 450 & collectionCode != "Action Plan 2019",
       FALSE, includeDistribution)) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
-      species == "Parnassius apollo" & datasetName %in% c("E1X_DB_references", "DistrMap_2013_2018"),
+      species == "Parnassius apollo" & collectionCode %in% c("E1X_DB_references", "DistrMap_2013_2018"),
       FALSE, includeDistribution)) |>
     dplyr::mutate(includeDistribution = dplyr::if_else(
-      species == "Rosalia alpina" & minimumDistanceFromBorders > 500 & datasetName == "NECCA_redlist",
+      species == "Rosalia alpina" & minimumDistanceFromBorders > 500 & collectionCode == "NECCA_redlist",
       TRUE, includeDistribution))
 }
 
@@ -259,7 +259,7 @@ apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km
     sf::st_join(eea_1km_etrs89) |>
     dplyr::rename(CELLCODE_eea_1km = CELLCODE) |>
     dplyr::mutate(includePopulation = dplyr::if_else(
-      datasetName %in% c("E1X_DB_references", "DistrMap_2013_2018"),
+      collectionCode %in% c("E1X_DB_references", "DistrMap_2013_2018"),
       FALSE, includeDistribution)) |>
     dplyr::mutate(includePopulation = dplyr::if_else(
       species == "Vertigo angustior", FALSE, includePopulation))
@@ -268,7 +268,7 @@ apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km
 build_presence_final <- function(species_samples_presence_pop) {
   species_samples_presence_pop |>
     sf::st_drop_geometry() |>
-    dplyr::filter(datasetName != "Invertebrates_records_private")
+    dplyr::filter(collectionCode != "Invertebrates_records_private")
 }
 
 build_presence_final_private <- function(species_samples_presence_pop) {
@@ -277,7 +277,7 @@ build_presence_final_private <- function(species_samples_presence_pop) {
 
 build_presence_final_sf <- function(species_samples_presence_pop) {
   dplyr::filter(species_samples_presence_pop,
-                datasetName != "Invertebrates_records_private")
+                collectionCode != "Invertebrates_records_private")
 }
 
 compute_species_range <- function(species_samples_presence_final, eea_grid_10km) {

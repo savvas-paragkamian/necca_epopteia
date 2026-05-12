@@ -367,10 +367,10 @@ read_my_new_source_occurrences <- function(path) {
       decimalLongitude = Longitude
     ) |>
     dplyr::mutate(
-      datasetName     = "My_New_Source",     # unique source identifier
+      collectionCode     = "My_New_Source",     # unique source identifier
       basisOfRecord   = "MATERIAL_SAMPLE",   # or MaterialCitation, HUMAN_OBSERVATION
       recordNumber    = as.character(ID),
-      collectionCode  = basename(path),
+      datasetName  = basename(path),
       individualCount = as.numeric(Count)
     )
 }
@@ -383,9 +383,9 @@ read_my_new_source_occurrences <- function(path) {
 | `submittedName` | character | Scientific name as it appears in the source |
 | `decimalLatitude` | numeric | Latitude in WGS84 |
 | `decimalLongitude` | numeric | Longitude in WGS84 |
-| `datasetName` | character | Unique source identifier |
+| `collectionCode` | character | Unique source identifier |
 | `recordNumber` | character | Unique record identifier |
-| `collectionCode` | character | Source filename |
+| `datasetName` | character | Source filename |
 | `basisOfRecord` | character | Record type |
 | `individualCount` | numeric | Number of individuals (NA if unknown) |
 
@@ -468,10 +468,10 @@ targets::tar_read("my_new_source_occurrences")
 
 # Test combining all sources
 targets::tar_make("species_occurrences_invertebrates")
-targets::tar_read("species_occurrences_invertebrates") |> dplyr::count(datasetName)
+targets::tar_read("species_occurrences_invertebrates") |> dplyr::count(collectionCode)
 ```
 
-Confirm that the new source appears in the `datasetName` column of the result.
+Confirm that the new source appears in the `collectionCode` column of the result.
 
 ---
 
@@ -490,7 +490,7 @@ Example — exclude the new source from population counts:
 apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km) {
   # ... existing logic ...
   dplyr::mutate(includePopulation = dplyr::if_else(
-    datasetName == "My_New_Source",
+    collectionCode == "My_New_Source",
     FALSE, includePopulation
   ))
 }

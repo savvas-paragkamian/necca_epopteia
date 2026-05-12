@@ -131,7 +131,7 @@ save_art17_overview_map <- function(
     natura2000_etrs89     = sf::st_transform(natura2000, 3035)
   ) +
     ggplot2::geom_sf(presence_sf,
-                     mapping = ggplot2::aes(shape = basisOfRecord, color = datasetName),
+                     mapping = ggplot2::aes(shape = basisOfRecord, color = collectionCode),
                      size = 2, alpha = 0.8, show.legend = TRUE) +
     ggplot2::scale_color_manual(values = .datasets_colors, name = "Datasets") +
     ggplot2::guides(
@@ -167,11 +167,11 @@ save_species_occurrence_maps <- function(
 
   paths <- vapply(species_list, function(sp) {
     sp_occ <- dplyr::filter(presence_sf, species == sp)
-    col_f  <- .datasets_colors[unique(sp_occ$datasetName)]
+    col_f  <- .datasets_colors[unique(sp_occ$collectionCode)]
 
     p <- g_base +
       ggplot2::geom_sf(sp_occ,
-                       mapping = ggplot2::aes(shape = basisOfRecord, color = datasetName),
+                       mapping = ggplot2::aes(shape = basisOfRecord, color = collectionCode),
                        size = 2, alpha = 0.9, show.legend = TRUE) +
       ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
       ggplot2::guides(
@@ -222,7 +222,7 @@ save_species_range_maps <- function(
   paths <- vapply(species_list, function(sp) {
     sp_occ   <- dplyr::filter(presence_sf, species == sp)
     sp_range <- dplyr::filter(species_range, species == sp)
-    col_f       <- .datasets_colors[unique(sp_occ$datasetName)]
+    col_f       <- .datasets_colors[unique(sp_occ$collectionCode)]
     col_range_f <- colors_cell_origin[unique(sp_range$cell_origin)]
 
     p <- g_base +
@@ -238,7 +238,7 @@ save_species_range_maps <- function(
         name = "Cell origin"
       ) +
       ggplot2::geom_sf(sp_occ,
-                       mapping = ggplot2::aes(color = datasetName),
+                       mapping = ggplot2::aes(color = collectionCode),
                        size = 1, alpha = 0.9, show.legend = TRUE) +
       ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
       ggplot2::guides(
@@ -291,7 +291,7 @@ save_species_distribution_maps <- function(
 
   paths <- vapply(species_list, function(sp) {
     sp_occ <- dplyr::filter(presence_sf, species == sp)
-    col_f  <- .datasets_colors[unique(sp_occ$datasetName)]
+    col_f  <- .datasets_colors[unique(sp_occ$collectionCode)]
 
     # Grid cells coloured by number of distinct sampled locations
     locations_grid <- eea_10km_etrs89 |>
@@ -312,7 +312,7 @@ save_species_distribution_maps <- function(
                        alpha = 0.5, colour = "transparent", na.rm = FALSE) +
       ggplot2::scale_fill_viridis_c(option = "viridis", direction = 1) +
       ggplot2::geom_sf(sp_occ,
-                       mapping = ggplot2::aes(color = datasetName),
+                       mapping = ggplot2::aes(color = collectionCode),
                        size = 0.5, alpha = 0.5) +
       ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
       ggplot2::guides(

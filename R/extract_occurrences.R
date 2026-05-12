@@ -33,9 +33,9 @@ occurrence_columns_to_keep <- function() {
     "submittedName",
     "decimalLatitude",
     "decimalLongitude",
-    "datasetName",
-    "recordNumber",
     "collectionCode",
+    "recordNumber",
+    "datasetName",
     "basisOfRecord",
     "individualCount"
   )
@@ -43,7 +43,7 @@ occurrence_columns_to_keep <- function() {
 
 read_gbif_occurrences <- function(path, greece_regions) {
   gbif_species_occ <- readr::read_delim(path, delim = "\t", show_col_types = FALSE) |>
-    dplyr::mutate(datasetName = "GBIF") |>
+    dplyr::mutate(collectionCode = "GBIF") |>
     dplyr::mutate(
       species = ifelse(
         !is.na(verbatimScientificName) &
@@ -69,7 +69,7 @@ read_gbif_occurrences <- function(path, greece_regions) {
   gbif_species_occ_gr <- gbif_species_occ_sf |>
     sf::st_drop_geometry() |>
     dplyr::mutate(recordNumber = occurrenceID) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 
   gbif_species_occ_gr
 }
@@ -86,7 +86,7 @@ read_e1x_mdpp_occurrences <- function(path) {
       decimalLongitude = as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)
     ) |>
     dplyr::filter(!is.na(decimalLongitude)) |>
-    dplyr::mutate(datasetName = "E1X_MDPP_2014_2024") |>
+    dplyr::mutate(collectionCode = "E1X_MDPP_2014_2024") |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE")
 
   species_data <- readxl::read_xlsx(
@@ -108,7 +108,7 @@ read_e1x_mdpp_occurrences <- function(path) {
     dplyr::filter(organismQuantity != 0 | is.na(organismQuantity)) |>
     dplyr::left_join(samples_data, by = c("Sam_ID" = "Sam_ID")) |>
     dplyr::mutate(recordNumber = Obs_ID) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 }
 
 read_e1x_db_reference_occurrences <- function(path) {
@@ -134,12 +134,12 @@ read_e1x_db_reference_occurrences <- function(path) {
 
   ref_samples_data |>
     dplyr::left_join(refs_data, by = c("Κωδικός Αναφοράς" = "Κωδικός Αναφοράς")) |>
-    dplyr::mutate(datasetName = "E1X_DB_references") |>
+    dplyr::mutate(collectionCode = "E1X_DB_references") |>
     dplyr::mutate(basisOfRecord = "MaterialCitation") |>
     dplyr::mutate(submittedName = `Ονομασία είδους`) |>
     dplyr::mutate(individualCount = as.numeric(`Πλήθος ατόμων`)) |>
     dplyr::mutate(recordNumber = SpRef_ID) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 }
 
 read_e1x_db_sampling_occurrences <- function(path) {
@@ -170,10 +170,10 @@ read_e1x_db_sampling_occurrences <- function(path) {
       art17_92_43_EEC = dplyr::if_else(`Όνομα είδους` != "Άλλο", TRUE, FALSE)
     ) |>
     dplyr::mutate(individualCount = as.numeric(`Αριθμός ατόμων είδους`)) |>
-    dplyr::mutate(datasetName = "E1X_DB") |>
+    dplyr::mutate(collectionCode = "E1X_DB") |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE") |>
     dplyr::mutate(recordNumber = Obs_ID) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 
   all_data |>
     dplyr::filter(individualCount > 0)
@@ -183,7 +183,7 @@ read_e2x_occurrences <- function(path) {
   readr::read_delim(path, delim = "\t", show_col_types = FALSE) |>
     dplyr::mutate(individualCount = NA) |>
     dplyr::mutate(recordNumber = paste0("E2X_DB_", sprintf("%02d", dplyr::row_number()))) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 }
 
 read_private_occurrences <- function(path) {
@@ -194,10 +194,10 @@ read_private_occurrences <- function(path) {
       submittedName = Species,
       individualCount = as.numeric(Individuals)
     ) |>
-    dplyr::mutate(datasetName = "Invertebrates_records_private") |>
+    dplyr::mutate(collectionCode = "Invertebrates_records_private") |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE") |>
     dplyr::mutate(recordNumber = as.character(ID)) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 }
 
 read_unio_crassus_occurrences <- function(path) {
@@ -209,18 +209,18 @@ read_unio_crassus_occurrences <- function(path) {
     ) |>
     dplyr::mutate(
       submittedName = gsub("U.", "Unio", submittedName),
-      datasetName = "E2X_DB_references",
-      collectionCode = basename(path),
+      collectionCode = "E2X_DB_references",
+      datasetName = basename(path),
       recordNumber = paste0("Lopes-Lima_2024_", sprintf("%02d", dplyr::row_number())),
       basisOfRecord = "MaterialCitation"
     ) |>
     dplyr::mutate(individualCount = NA) |>
     dplyr::filter(COUNTRY == "Greece") |>
     dplyr::distinct(
-      datasetName,
+      collectionCode,
       basisOfRecord,
       submittedName,
-      collectionCode,
+      datasetName,
       recordNumber,
       individualCount,
       decimalLatitude,
@@ -244,11 +244,11 @@ read_necca_redlist_points_occurrences <- function(path) {
     ) |>
     sf::st_drop_geometry() |>
     dplyr::rename(submittedName = sci_name) |>
-    dplyr::mutate(datasetName = "NECCA_redlist") |>
+    dplyr::mutate(collectionCode = "NECCA_redlist") |>
     dplyr::mutate(individualCount = NA) |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE") |>
     dplyr::mutate(recordNumber = paste0("NECCA_redlist_", sprintf("%03d", dplyr::row_number()))) |>
-    dplyr::mutate(collectionCode = basename(path))
+    dplyr::mutate(datasetName = basename(path))
 }
 
 read_national_report_distribution_occurrences <- function(
@@ -296,9 +296,9 @@ read_national_report_distribution_occurrences <- function(
       species = gsub("Unio desectus", "Unio crassus", species),
       species = gsub("Polyommatus eros", "Polyommatus eroides", species),
       species = gsub("Paracossulus thrips", "Catopta thrips", species),
-      datasetName = "National_report_2013_2018",
+      collectionCode = "National_report_2013_2018",
       basisOfRecord = "ESTIMATED_DISTRIBUTION",
-      collectionCode = paste(
+      datasetName = paste(
         basename(distribution_path),
         basename(sensitive_distribution_path),
         sep = ";"
@@ -310,7 +310,7 @@ read_p_apollo_action_plan_occurrences <- function(path, eea_grid_10km) {
 
   p_apollo_dist <- sf::st_read(path, quiet = TRUE) |>
     dplyr::mutate(
-      datasetName = "Action Plan 2019",
+      collectionCode = "Action Plan 2019",
       basisOfRecord = "ESTIMATED_CENTROID"
     )
 
@@ -358,7 +358,7 @@ read_p_apollo_action_plan_occurrences <- function(path, eea_grid_10km) {
         "action_plan_p.apollo_",
         sprintf("%02d", dplyr::row_number())
       ),
-      collectionCode = basename(path),
+      datasetName = basename(path),
       species = "Parnassius apollo",
       individualCount = NA,
       submittedName = "Parnassius apollo"

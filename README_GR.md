@@ -247,8 +247,8 @@ verify_species_taxonomy(
 | Σχέδιο Δράσης *Parnassius apollo* 2019 | SHP | Πλέγμα κατανομής για το συγκεκριμένο είδος |
 
 Όλες οι πηγές καταγραφών τυποποιούνται στην ορολογία Darwin Core
-(`submittedName`, `decimalLatitude`, `decimalLongitude`, `datasetName`,
-`recordNumber`, `collectionCode`, `basisOfRecord`, `individualCount`).
+(`submittedName`, `decimalLatitude`, `decimalLongitude`, `collectionCode`,
+`recordNumber`, `datasetName`, `basisOfRecord`, `individualCount`).
 
 ### Χωρικά επίπεδα αναφοράς (`data/spatial/`)
 

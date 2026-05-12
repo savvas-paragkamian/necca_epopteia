@@ -243,8 +243,8 @@ EOL (12). After inspecting the matches, update
 | *Parnassius apollo* Action Plan 2019 | SHP | Species-specific distribution grid |
 
 All occurrence sources are standardised to Darwin Core column names
-(`submittedName`, `decimalLatitude`, `decimalLongitude`, `datasetName`,
-`recordNumber`, `collectionCode`, `basisOfRecord`, `individualCount`).
+(`submittedName`, `decimalLatitude`, `decimalLongitude`, `collectionCode`,
+`recordNumber`, `datasetName`, `basisOfRecord`, `individualCount`).
 
 ### Spatial reference layers (`data/spatial/`)
 

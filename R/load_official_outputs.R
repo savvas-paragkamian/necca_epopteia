@@ -50,8 +50,8 @@ save_distributions_tsv <- function(
     dplyr::summarise(
       in_observation = TRUE,
       n_records      = dplyr::n(),
-      n_datasets     = dplyr::n_distinct(datasetName),
-      datasets       = paste(sort(unique(datasetName)), collapse = ";"),
+      n_datasets     = dplyr::n_distinct(collectionCode),
+      datasets       = paste(sort(unique(collectionCode)), collapse = ";"),
       .groups        = "drop"
     )
 
@@ -85,9 +85,9 @@ save_populations_tsv <- function(species_samples_presence_final, path) {
     dplyr::group_by(species, CELLCODE_eea_10km, CELLCODE_eea_1km) |>
     dplyr::summarise(
       n_records         = dplyr::n(),
-      n_datasets        = dplyr::n_distinct(datasetName),
+      n_datasets        = dplyr::n_distinct(collectionCode),
       total_individuals = sum(as.numeric(individualCount), na.rm = TRUE),
-      datasets          = paste(sort(unique(datasetName)), collapse = ";"),
+      datasets          = paste(sort(unique(collectionCode)), collapse = ";"),
       .groups           = "drop"
     )
 

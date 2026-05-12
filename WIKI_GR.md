@@ -372,10 +372,10 @@ read_my_new_source_occurrences <- function(path) {
       decimalLongitude = Longitude
     ) |>
     dplyr::mutate(
-      datasetName    = "My_New_Source",      # μοναδικό όνομα πηγής
+      collectionCode    = "My_New_Source",      # μοναδικό όνομα πηγής
       basisOfRecord  = "MATERIAL_SAMPLE",    # ή MaterialCitation, HUMAN_OBSERVATION
       recordNumber   = as.character(ID),
-      collectionCode = basename(path),
+      datasetName = basename(path),
       individualCount = as.numeric(Count)
     )
 }
@@ -388,9 +388,9 @@ read_my_new_source_occurrences <- function(path) {
 | `submittedName` | character | Επιστημονικό όνομα όπως υπάρχει στην πηγή |
 | `decimalLatitude` | numeric | Γεωγραφικό πλάτος WGS84 |
 | `decimalLongitude` | numeric | Γεωγραφικό μήκος WGS84 |
-| `datasetName` | character | Μοναδικό όνομα πηγής |
+| `collectionCode` | character | Μοναδικό όνομα πηγής |
 | `recordNumber` | character | Μοναδικός αριθμός εγγραφής |
-| `collectionCode` | character | Όνομα αρχείου προέλευσης |
+| `datasetName` | character | Όνομα αρχείου προέλευσης |
 | `basisOfRecord` | character | Τύπος εγγραφής |
 | `individualCount` | numeric | Αριθμός ατόμων (NA αν άγνωστο) |
 
@@ -475,10 +475,10 @@ targets::tar_read("my_new_source_occurrences")
 
 # Δοκιμή ενοποίησης
 targets::tar_make("species_occurrences_invertebrates")
-targets::tar_read("species_occurrences_invertebrates") |> dplyr::count(datasetName)
+targets::tar_read("species_occurrences_invertebrates") |> dplyr::count(collectionCode)
 ```
 
-Βεβαιωθείτε ότι η νέα πηγή εμφανίζεται στη στήλη `datasetName` του
+Βεβαιωθείτε ότι η νέα πηγή εμφανίζεται στη στήλη `collectionCode` του
 αποτελέσματος.
 
 ---
@@ -501,7 +501,7 @@ flags), ανοίξτε το `R/transform.R` και τροποποιήστε τι
 apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km) {
   # ... υπάρχουσα λογική ...
   dplyr::mutate(includePopulation = dplyr::if_else(
-    datasetName == "My_New_Source",
+    collectionCode == "My_New_Source",
     FALSE, includePopulation
   ))
 }
