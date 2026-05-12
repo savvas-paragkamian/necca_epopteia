@@ -40,4 +40,5 @@ outputs:
   species_samples_presence_final: "results/official/species_samples_presence_final.tsv"
   distributions_presence_final: "results/official/distributions_presence_final.tsv"
   populations_presence_final: "results/official/populations_presence_final.tsv"
+  natura_populations: "results/official/natura_populations.tsv"
   maps_dir: "results/maps"

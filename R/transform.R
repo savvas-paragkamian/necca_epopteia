@@ -17,6 +17,7 @@ library(sf)
 library(terra)
 library(units)
 library(dplyr)
+library(tidyr)
 library(readr)
 library(stringr)
 library(tibble)
@@ -304,4 +305,76 @@ compute_species_range <- function(species_samples_presence_final, eea_grid_10km)
   })
 
   dplyr::bind_rows(range_list)
+}
+
+enrich_with_natura2000 <- function(species_samples_presence_final_sf, natura2000) {
+  natura2000_etrs89 <- sf::st_transform(natura2000, 3035)
+  sf::st_join(
+    species_samples_presence_final_sf,
+    dplyr::select(natura2000_etrs89, SITECODE, SITETYPE)
+  )
+}
+
+build_distributions_summary <- function(
+  species_samples_presence_final,
+  species_range,
+  eea_grid_10km
+) {
+  cell_area <- eea_grid_10km |>
+    sf::st_transform(3035) |>
+    dplyr::mutate(AreaKm2 = as.numeric(sf::st_area(geometry)) / 1e6) |>
+    sf::st_drop_geometry() |>
+    dplyr::select(CELLCODE, AreaKm2)
+
+  obs_cells <- species_samples_presence_final |>
+    dplyr::filter(includeDistribution) |>
+    dplyr::distinct(species, CELLCODE_eea_10km) |>
+    dplyr::rename(CELLCODE = CELLCODE_eea_10km) |>
+    dplyr::mutate(in_observation = TRUE)
+
+  range_cells <- species_range |>
+    sf::st_drop_geometry() |>
+    dplyr::distinct(species, CELLCODE) |>
+    dplyr::mutate(in_range = TRUE)
+
+  dplyr::full_join(obs_cells, range_cells, by = c("species", "CELLCODE")) |>
+    dplyr::mutate(
+      in_observation = dplyr::if_else(is.na(in_observation), FALSE, in_observation),
+      in_range       = dplyr::if_else(is.na(in_range),       FALSE, in_range)
+    ) |>
+    dplyr::left_join(cell_area, by = "CELLCODE") |>
+    dplyr::group_by(species) |>
+    dplyr::summarise(
+      CellCount = dplyr::n(),
+      AreaKm2   = round(sum(AreaKm2, na.rm = TRUE), 2),
+      .groups   = "drop"
+    )
+}
+
+build_populations_summary <- function(species_samples_presence_final) {
+  populations_with_refs <- species_samples_presence_final |>
+    dplyr::filter(includeDistribution) |>
+    dplyr::distinct(species, CELLCODE_eea_1km) |>
+    dplyr::group_by(species) |>
+    dplyr::summarise(n_1km = dplyr::n(), .groups = "drop") |>
+    dplyr::mutate(method = "with_refs")
+
+  populations_no_refs <- species_samples_presence_final |>
+    dplyr::filter(includePopulation, collectionCode != "E1X_DB_references") |>
+    dplyr::distinct(species, CELLCODE_eea_1km) |>
+    dplyr::group_by(species) |>
+    dplyr::summarise(n_1km = dplyr::n(), .groups = "drop") |>
+    dplyr::mutate(method = "no_refs")
+
+  dplyr::bind_rows(populations_with_refs, populations_no_refs) |>
+    tidyr::pivot_wider(names_from = method, values_from = n_1km)
+}
+
+build_natura_populations_summary <- function(species_samples_presence_natura) {
+  species_samples_presence_natura |>
+    sf::st_drop_geometry() |>
+    dplyr::filter(includePopulation, !is.na(SITECODE)) |>
+    dplyr::distinct(species, SITECODE, SITETYPE, CELLCODE_eea_1km) |>
+    dplyr::group_by(species, SITECODE, SITETYPE) |>
+    dplyr::summarise(n_1km = dplyr::n(), .groups = "drop")
 }

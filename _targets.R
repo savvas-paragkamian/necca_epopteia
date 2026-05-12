@@ -262,6 +262,45 @@ list(
     )
   ),
 
+  tar_target(
+    species_samples_presence_natura,
+    enrich_with_natura2000(
+      species_samples_presence_final_sf = species_samples_presence_final_sf,
+      natura2000                        = spatial_layers$natura2000
+    )
+  ),
+
+  tar_target(
+    species_range,
+    compute_species_range(
+      species_samples_presence_final = species_samples_presence_final,
+      eea_grid_10km                  = spatial_layers$eea_grid_10km
+    )
+  ),
+
+  tar_target(
+    distributions_summary,
+    build_distributions_summary(
+      species_samples_presence_final = species_samples_presence_final,
+      species_range                  = species_range,
+      eea_grid_10km                  = spatial_layers$eea_grid_10km
+    )
+  ),
+
+  tar_target(
+    populations_summary,
+    build_populations_summary(
+      species_samples_presence_final = species_samples_presence_final
+    )
+  ),
+
+  tar_target(
+    natura_populations_summary,
+    build_natura_populations_summary(
+      species_samples_presence_natura = species_samples_presence_natura
+    )
+  ),
+
   # --- Load (Maps) ---
 
   tar_target(
@@ -307,14 +346,6 @@ list(
       maps_dir                          = a17_config$paths$maps_dir
     ),
     format = "file"
-  ),
-
-  tar_target(
-    species_range,
-    compute_species_range(
-      species_samples_presence_final = species_samples_presence_final,
-      eea_grid_10km                  = spatial_layers$eea_grid_10km
-    )
   ),
 
   tar_target(
@@ -383,8 +414,7 @@ list(
   tar_target(
     file_distributions_final,
     save_distributions_tsv(
-      species_samples_presence_final = species_samples_presence_final,
-      species_range                  = species_range,
+      distributions_summary = distributions_summary,
       path = a17_config$outputs$distributions_presence_final
     ),
     format = "file"
@@ -393,8 +423,17 @@ list(
   tar_target(
     file_populations_final,
     save_populations_tsv(
-      species_samples_presence_final = species_samples_presence_final,
+      populations_summary = populations_summary,
       path = a17_config$outputs$populations_presence_final
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_natura_populations,
+    save_natura_populations_tsv(
+      natura_populations_summary = natura_populations_summary,
+      path = a17_config$outputs$natura_populations
     ),
     format = "file"
   )
