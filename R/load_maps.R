@@ -133,7 +133,7 @@ save_art17_overview_map <- function(
     ggplot2::geom_sf(presence_sf,
                      mapping = ggplot2::aes(shape = basisOfRecord, color = collectionCode),
                      size = 2, alpha = 0.8, show.legend = TRUE) +
-    ggplot2::scale_color_manual(values = .datasets_colors, name = "Datasets") +
+    ggplot2::scale_color_manual(values = .datasets_colors, name = "collectionCode") +
     ggplot2::guides(
       fill  = ggplot2::guide_legend(position = "right",
                                     override.aes = list(linetype = 0, color = NA)),
@@ -173,7 +173,7 @@ save_species_occurrence_maps <- function(
       ggplot2::geom_sf(sp_occ,
                        mapping = ggplot2::aes(shape = basisOfRecord, color = collectionCode),
                        size = 2, alpha = 0.9, show.legend = TRUE) +
-      ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
+      ggplot2::scale_color_manual(values = col_f, name = "collectionCode") +
       ggplot2::guides(
         fill  = ggplot2::guide_legend(position = "right",
                                       override.aes = list(linetype = 0, color = NA)),
@@ -240,7 +240,7 @@ save_species_range_maps <- function(
       ggplot2::geom_sf(sp_occ,
                        mapping = ggplot2::aes(color = collectionCode),
                        size = 1, alpha = 0.9, show.legend = TRUE) +
-      ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
+      ggplot2::scale_color_manual(values = col_f, name = "collectionCode") +
       ggplot2::guides(
         fill = ggplot2::guide_legend(position = "right",
                                      override.aes = list(linetype = 0, color = NA))
@@ -314,7 +314,7 @@ save_species_distribution_maps <- function(
       ggplot2::geom_sf(sp_occ,
                        mapping = ggplot2::aes(color = collectionCode),
                        size = 0.5, alpha = 0.5) +
-      ggplot2::scale_color_manual(values = col_f, name = "Datasets") +
+      ggplot2::scale_color_manual(values = col_f, name = "collectionCode") +
       ggplot2::guides(
         color = ggplot2::guide_legend(position = "right",
                                       override.aes = list(linetype = 0, fill = NA)),
