@@ -9,12 +9,13 @@
 
 1. [Προαπαιτούμενα](#1-προαπαιτούμενα)
 2. [Εγκατάσταση](#2-εγκατάσταση)
-3. [Δομή φακέλων](#3-δομή-φακέλων)
-4. [Ρύθμιση — `config/params.yml`](#4-ρύθμιση--configparamsyml)
-5. [Εκτέλεση του αγωγού](#5-εκτέλεση-του-αγωγού)
-6. [Επιθεώρηση αποτελεσμάτων](#6-επιθεώρηση-αποτελεσμάτων)
-7. [Πώς να προσθέσετε νέα πηγή δεδομένων](#7-πώς-να-προσθέσετε-νέα-πηγή-δεδομένων)
-8. [Συνηθισμένα σφάλματα](#8-συνηθισμένα-σφάλματα)
+3. [Προετοιμασία δεδομένων μίας-χρήσης](#3-προετοιμασία-δεδομένων-μίας-χρήσης)
+4. [Δομή φακέλων](#4-δομή-φακέλων)
+5. [Ρύθμιση — `config/params.yml`](#5-ρύθμιση--configparamsyml)
+6. [Εκτέλεση του αγωγού](#6-εκτέλεση-του-αγωγού)
+7. [Επιθεώρηση αποτελεσμάτων](#7-επιθεώρηση-αποτελεσμάτων)
+8. [Πώς να προσθέσετε νέα πηγή δεδομένων](#8-πώς-να-προσθέσετε-νέα-πηγή-δεδομένων)
+9. [Συνηθισμένα σφάλματα](#9-συνηθισμένα-σφάλματα)
 
 ---
 
@@ -93,7 +94,94 @@ podman machine start
 
 ---
 
-## 3. Δομή φακέλων
+## 3. Προετοιμασία δεδομένων μίας-χρήσης
+
+Πριν την πρώτη εκτέλεση του αγωγού απαιτούνται τρία προπαρασκευαστικά βήματα
+που εκτελούνται διαδραστικά. Όλες οι βοηθητικές συναρτήσεις βρίσκονται στο
+`R/helper_functions.R`.
+
+### 3.1 Επαλήθευση ταξινόμησης ειδών
+
+Τα ονόματα των ειδών πρέπει να επαληθευτούν έναντι αυθεντικών βάσεων
+δεδομένων και να υποστούν **χειροκίνητη επιμέλεια** για να παραχθεί το
+`data/raw/species_taxonomy_curated.tsv`, το οποίο αποτελεί είσοδο ταξινόμησης
+για τον αγωγό. Το βήμα αυτό δεν μπορεί να αυτοματοποιηθεί πλήρως — ο
+βιολόγος πρέπει να επιθεωρήσει τις αντιστοιχίσεις και να αποφασίσει για τα
+αποδεκτά canonical ονόματα.
+
+```r
+source("R/helper_functions.R")
+
+verify_species_taxonomy(
+  species_names = species_names_combined,
+  output_path   = "results/gnr_species_verifier.tsv"
+)
+```
+
+Τα ονόματα ελέγχονται έναντι Catalogue of Life (1), WoRMS (9), GBIF (11) και
+EOL (12) με `all_matches = TRUE`. Μετά την επιθεώρηση του αρχείου εξόδου,
+ενημερώστε το `data/raw/species_taxonomy_curated.tsv` με τα αποδεκτά ονόματα.
+
+### 3.2 Λήψη καταγραφών GBIF
+
+Τα διαπιστευτήρια GBIF πρέπει να αποθηκευτούν στο `~/.Renviron`:
+
+```
+GBIF_USER=your_username
+GBIF_PWD=your_password
+GBIF_EMAIL=your_email
+```
+
+Στη συνέχεια εκτελέστε διαδραστικά:
+
+```r
+source("R/helper_functions.R")
+
+keys <- get_gbif_taxon_keys(species_names_combined)
+key  <- request_gbif_download(keys, country = "GR")
+import_gbif_download(key, output_path = "data/raw/gbif_invertebrate_species_occ.tsv")
+```
+
+Ή ως ενιαία κλήση:
+
+```r
+download_gbif_occurrences(
+  species_names = species_names_combined,
+  output_path   = "data/raw/gbif_invertebrate_species_occ.tsv"
+)
+```
+
+### 3.3 Περικοπή μεγάλων rasters στην Ελλάδα
+
+Το πλήρες EU DEM mosaic (~20 GB, EPSG:3035) πρέπει να περικοπεί στα όρια
+της Ελλάδας πριν τη χρήση του από τον αγωγό:
+
+```r
+source("R/helper_functions.R")
+
+greece_regions <- sf::st_read("data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp")
+
+crop_eu_dem_to_greece(
+  eu_dem_path    = "/path/to/full/eudem_dem_3035_europe.tif",
+  greece_regions = greece_regions,
+  output_path    = "data/spatial/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif"
+)
+```
+
+Για οποιοδήποτε άλλο μεγάλο raster (WorldClim, CORINE κτλ.):
+
+```r
+crop_raster_to_extent(
+  raster_path = "/path/to/source.tif",
+  extent_sf   = greece_regions,
+  output_path = "data/spatial/output/cropped.tif",
+  target_crs  = 3035   # NULL για διατήρηση του αρχικού CRS
+)
+```
+
+---
+
+## 4. Δομή φακέλων
 
 ```
 necca_epopteia_pipeline/
@@ -122,7 +210,7 @@ necca_epopteia_pipeline/
 
 ---
 
-## 4. Ρύθμιση — `config/params.yml`
+## 5. Ρύθμιση — `config/params.yml`
 
 Το αρχείο `config/params.yml` είναι ο **μοναδικός τόπος** όπου δηλώνονται
 διαδρομές αρχείων. Δεν υπάρχουν hardcoded διαδρομές μέσα στον κώδικα R.
@@ -159,7 +247,7 @@ outputs:
 
 ---
 
-## 5. Εκτέλεση του αγωγού
+## 6. Εκτέλεση του αγωγού
 
 ### 5.1 Πλήρης εκτέλεση
 
@@ -212,7 +300,7 @@ targets::tar_destroy()
 
 ---
 
-## 6. Επιθεώρηση αποτελεσμάτων
+## 7. Επιθεώρηση αποτελεσμάτων
 
 ### 6.1 Τελικά αρχεία εξόδου
 
@@ -246,7 +334,7 @@ targets::tar_read(species_range)
 
 ---
 
-## 7. Πώς να προσθέσετε νέα πηγή δεδομένων
+## 8. Πώς να προσθέσετε νέα πηγή δεδομένων
 
 Η προσθήκη νέας πηγής δεδομένων εμφανίσεων απαιτεί αλλαγές σε **τέσσερα
 αρχεία** με συγκεκριμένη σειρά. Ακολουθήστε τα παρακάτω βήματα.
@@ -434,7 +522,7 @@ apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km
 
 ---
 
-## 8. Συνηθισμένα σφάλματα
+## 9. Συνηθισμένα σφάλματα
 
 ### `Error in loadNamespace: there is no package called 'targets'`
 

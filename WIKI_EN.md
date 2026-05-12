@@ -9,12 +9,13 @@ for the Article 17 reporting (Directive 92/43/EEC), period 2019–2024.
 
 1. [Prerequisites](#1-prerequisites)
 2. [Installation](#2-installation)
-3. [Folder structure](#3-folder-structure)
-4. [Configuration — `config/params.yml`](#4-configuration--configparamsyml)
-5. [Running the pipeline](#5-running-the-pipeline)
-6. [Inspecting results](#6-inspecting-results)
-7. [How to add a new data source](#7-how-to-add-a-new-data-source)
-8. [Common errors](#8-common-errors)
+3. [One-time data preparation](#3-one-time-data-preparation)
+4. [Folder structure](#4-folder-structure)
+5. [Configuration — `config/params.yml`](#5-configuration--configparamsyml)
+6. [Running the pipeline](#6-running-the-pipeline)
+7. [Inspecting results](#7-inspecting-results)
+8. [How to add a new data source](#8-how-to-add-a-new-data-source)
+9. [Common errors](#9-common-errors)
 
 ---
 
@@ -92,7 +93,92 @@ in the folders defined in `config/params.yml`:
 
 ---
 
-## 3. Folder structure
+## 3. One-time data preparation
+
+Before running the pipeline for the first time, three preparation steps must be
+completed interactively. All helper functions live in `R/helper_functions.R`.
+
+### 3.1 Taxonomic name verification
+
+Species names must be verified against authoritative databases and **manually
+curated** to produce `data/raw/species_taxonomy_curated.tsv`, which is the
+taxonomy input for the pipeline. This step cannot be automated end-to-end —
+the biologist must review the matches and decide on accepted canonical names.
+
+```r
+source("R/helper_functions.R")
+
+verify_species_taxonomy(
+  species_names = species_names_combined,
+  output_path   = "results/gnr_species_verifier.tsv"
+)
+```
+
+Names are checked against Catalogue of Life (1), WoRMS (9), GBIF (11) and
+EOL (12) with `all_matches = TRUE`. After reviewing the output TSV, update
+`data/raw/species_taxonomy_curated.tsv` with the accepted names.
+
+### 3.2 GBIF occurrence download
+
+GBIF credentials must be stored in `~/.Renviron`:
+
+```
+GBIF_USER=your_username
+GBIF_PWD=your_password
+GBIF_EMAIL=your_email
+```
+
+Then run interactively:
+
+```r
+source("R/helper_functions.R")
+
+keys <- get_gbif_taxon_keys(species_names_combined)
+key  <- request_gbif_download(keys, country = "GR")
+import_gbif_download(key, output_path = "data/raw/gbif_invertebrate_species_occ.tsv")
+```
+
+Or as a single call:
+
+```r
+download_gbif_occurrences(
+  species_names = species_names_combined,
+  output_path   = "data/raw/gbif_invertebrate_species_occ.tsv"
+)
+```
+
+### 3.3 Cropping large rasters to Greece
+
+The full EU DEM mosaic (~20 GB, EPSG:3035) must be cropped to Greece before
+the pipeline can use it:
+
+```r
+source("R/helper_functions.R")
+
+greece_regions <- sf::st_read("data/spatial/gadm41_GRC_shp/gadm41_GRC_2.shp")
+
+crop_eu_dem_to_greece(
+  eu_dem_path    = "/path/to/full/eudem_dem_3035_europe.tif",
+  greece_regions = greece_regions,
+  output_path    = "data/spatial/EU_DEM_mosaic_5deg_gr/crop_eudem_dem_3035_europe.tif"
+)
+```
+
+For any other large raster (WorldClim, CORINE, etc.):
+
+```r
+crop_raster_to_extent(
+  raster_path = "/path/to/source.tif",
+  extent_sf   = greece_regions,
+  output_path = "data/spatial/output/cropped.tif",
+  target_crs  = 3035   # NULL to keep source CRS
+)
+```
+
+---
+
+## 4. Folder structure
+
 
 ```
 necca_epopteia_pipeline/
@@ -121,7 +207,7 @@ necca_epopteia_pipeline/
 
 ---
 
-## 4. Configuration — `config/params.yml`
+## 5. Configuration — `config/params.yml`
 
 The file `config/params.yml` is the **only place** where file paths are declared.
 There are no hardcoded paths anywhere in the R source code.
@@ -158,9 +244,9 @@ code needs to be modified.
 
 ---
 
-## 5. Running the pipeline
+## 6. Running the pipeline
 
-### 5.1 Full run
+### 6.1 Full run
 
 Open R in the project folder and run:
 
@@ -173,7 +259,7 @@ correct order. Each step is cached in the `_targets/` folder. If you re-run the
 command without any changes to the input data, `targets` skips the already
 computed steps.
 
-### 5.2 Parallel execution
+### 6.2 Parallel execution
 
 For faster execution on a multi-core system:
 
@@ -183,7 +269,7 @@ plan(multisession)
 targets::tar_make(callr_function = NULL)
 ```
 
-### 5.3 Partial execution
+### 6.3 Partial execution
 
 You can run only a specific step:
 
@@ -193,7 +279,7 @@ targets::tar_make("species_samples_eea")
 
 `targets` will automatically run any upstream steps that are needed.
 
-### 5.4 Useful management commands
+### 6.4 Useful management commands
 
 ```r
 # Which steps need to re-run?
@@ -211,9 +297,9 @@ targets::tar_destroy()
 
 ---
 
-## 6. Inspecting results
+## 7. Inspecting results
 
-### 6.1 Final output files
+### 7.1 Final output files
 
 After a successful run, output files are located at the paths defined under
 `outputs:` in `config/params.yml`:
@@ -228,7 +314,7 @@ After a successful run, output files are located at the paths defined under
 | `results/species_range/species_range.shp` | Species range polygons |
 | `results/maps/` | Per-species and overview PNG maps |
 
-### 6.2 Inspecting intermediate steps
+### 7.2 Inspecting intermediate steps
 
 Any intermediate result can be loaded directly into memory:
 
@@ -245,7 +331,7 @@ targets::tar_read(species_range)
 
 ---
 
-## 7. How to add a new data source
+## 8. How to add a new data source
 
 Adding a new occurrence data source requires changes to **four files** in a
 specific order. Follow the steps below.
@@ -425,7 +511,7 @@ apply_population_filters <- function(species_samples_presence_dist, eea_grid_1km
 
 ---
 
-## 8. Common errors
+## 9. Common errors
 
 ### `Error in loadNamespace: there is no package called 'targets'`
 

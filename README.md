@@ -129,7 +129,7 @@ The R functions implementing each phase live in the `R/` directory:
 |------|-------|------|
 | `extract_occurrences.R` | Extract | One reader function per data source |
 | `extract_spatial.R` | Extract | Loads spatial reference layers |
-| `helper_functions.R` | Preparation / Extract / Transform | Spatial utilities (range expansion, raster extraction); GBIF download helpers; one-time raster preparation tools (crop EU DEM to Greece) |
+| `helper_functions.R` | Preparation / Extract / Transform | Spatial utilities (range expansion, raster extraction); GBIF download helpers; one-time raster preparation tools (crop EU DEM to Greece); taxonomic name verification against CoL, WoRMS, GBIF and EOL (output requires manual curation) |
 | `transform.R` | Transform | All enrichment, filtering and flag-assignment functions |
 | `load_maps.R` | Load | Map generation per species and overview maps |
 | `load_official_outputs.R` | Load | TSV writers for official Art. 17 reporting files |
@@ -139,8 +139,8 @@ The R functions implementing each phase live in the `R/` directory:
 
 ## Data preparation
 
-Before running the pipeline for the first time, two one-time preparation steps
-are required. Helper functions in `R/helper_functions.R` automate both.
+Before running the pipeline for the first time, three one-time preparation steps
+are required. Helper functions in `R/helper_functions.R` cover all three.
 
 ### Downloading GBIF occurrences
 
@@ -198,6 +198,29 @@ crop_raster_to_extent(
   target_crs  = 3035   # NULL to keep source CRS
 )
 ```
+
+### Taxonomic name verification
+
+Species names must be verified against authoritative databases and manually
+curated before the pipeline can use them. This produces
+`data/raw/species_taxonomy_curated.tsv`, which is the taxonomy input for the
+pipeline.
+
+> **Note:** this step requires human review — the output is not used directly
+> by the pipeline but feeds manual curation of the taxonomy file.
+
+```r
+source("R/helper_functions.R")
+
+verify_species_taxonomy(
+  species_names = species_names_combined,
+  output_path   = "results/gnr_species_verifier.tsv"
+)
+```
+
+Names are checked against Catalogue of Life (1), WoRMS (9), GBIF (11) and
+EOL (12). After inspecting the matches, update
+`data/raw/species_taxonomy_curated.tsv` with the accepted canonical names.
 
 ---
 
