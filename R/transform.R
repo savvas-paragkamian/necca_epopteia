@@ -279,3 +279,29 @@ build_presence_final_sf <- function(species_samples_presence_pop) {
   dplyr::filter(species_samples_presence_pop,
                 datasetName != "Invertebrates_records_private")
 }
+
+compute_species_range <- function(species_samples_presence_final, eea_grid_10km) {
+  eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
+
+  presence <- dplyr::filter(species_samples_presence_final,
+                             includeDistribution == TRUE)
+
+  species_list <- sort(unique(presence$species))
+
+  range_list <- lapply(species_list, function(sp) {
+    sp_cells <- presence |>
+      dplyr::filter(species == sp) |>
+      dplyr::distinct(CELLCODE_eea_10km) |>
+      dplyr::rename(CELLCODE = CELLCODE_eea_10km)
+
+    grids    <- dplyr::filter(eea_10km_etrs89, CELLCODE %in% sp_cells$CELLCODE)
+    expanded <- expand_range_with_gap_distance(
+      distribution   = grids,
+      full_grid      = eea_10km_etrs89,
+      gap_distance_m = 40000
+    )
+    dplyr::mutate(expanded, species = sp)
+  })
+
+  dplyr::bind_rows(range_list)
+}
