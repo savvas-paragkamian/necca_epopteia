@@ -12,6 +12,9 @@
 ##      and retrieve asynchronous GBIF occurrence downloads.
 ##   3. Pipeline-specific raster preparation — crop large source rasters
 ##      (EU DEM, etc.) to Greece before first pipeline run.
+##   4. Taxonomic name verification — verify species names against Catalogue
+##      of Life, WoRMS, GBIF and EOL; output requires manual review before
+##      feeding the pipeline as species_taxonomy_curated.tsv.
 ##
 ## Funded by: Natural Environment & Climate Change Agency (NECCA/ΟΦΥΠΕΚΑ)
 
@@ -325,4 +328,42 @@ crop_eu_dem_to_greece <- function(eu_dem_path, greece_regions, output_path) {
     target_crs  = NULL,
     mask        = FALSE
   )
+}
+
+# =============================================================================
+# Taxonomic name verification
+# Interactive / one-time preparation tool.
+# Output requires MANUAL REVIEW before it can feed the pipeline:
+#   results → human curation → data/raw/species_taxonomy_curated.tsv
+# Data sources: 1 = Catalogue of Life, 9 = WoRMS, 11 = GBIF, 12 = EOL
+# =============================================================================
+
+# Verify a character vector of species names against four authoritative
+# taxonomic databases and save the results as a TSV for manual curation.
+#
+# species_names : character vector of scientific names to verify
+# output_path   : destination .tsv file (directory created if absent)
+#
+# Returns the verification data frame invisibly.
+# NOTE: the saved TSV is an intermediate review file, not a pipeline input.
+# After inspecting the matches, manually produce species_taxonomy_curated.tsv.
+verify_species_taxonomy <- function(species_names,
+                                    output_path = "results/gnr_species_verifier.tsv") {
+  dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+  result <- taxize::gna_verifier(
+    species_names,
+    all_matches  = TRUE,
+    data_sources = c(1, 9, 11, 12)
+  )
+
+  readr::write_delim(result, output_path, delim = "\t")
+  message(
+    "Verified ", length(species_names), " names against ",
+    "Catalogue of Life, WoRMS, GBIF, and EOL.\n",
+    "Results saved to: ", output_path, "\n",
+    "ACTION REQUIRED: review matches and update species_taxonomy_curated.tsv."
+  )
+
+  invisible(result)
 }
