@@ -317,32 +317,24 @@ enrich_with_natura2000 <- function(species_samples_presence_final_sf, natura2000
 
 build_distributions_summary <- function(
   species_samples_presence_final,
-  species_range,
-  eea_grid_10km
+  eea_grid_10km,
+  greece_regions
 ) {
-  cell_area <- eea_grid_10km |>
-    sf::st_transform(3035) |>
-    dplyr::mutate(AreaKm2 = as.numeric(sf::st_area(geometry)) / 1e6) |>
-    sf::st_drop_geometry() |>
-    dplyr::select(CELLCODE, AreaKm2)
+  eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
+  greece_etrs89   <- sf::st_transform(greece_regions, 3035)
 
-  obs_cells <- species_samples_presence_final |>
+  # Land area per cell: intersection clips coastal/border cells to actual territory
+  cell_area_land <- sf::st_intersection(eea_10km_etrs89, greece_etrs89) |>
+    dplyr::mutate(AreaKm2 = as.numeric(units::set_units(sf::st_area(geometry), "km^2"))) |>
+    sf::st_drop_geometry() |>
+    dplyr::group_by(CELLCODE) |>
+    dplyr::summarise(AreaKm2 = sum(AreaKm2), .groups = "drop")
+
+  species_samples_presence_final |>
     dplyr::filter(includeDistribution) |>
     dplyr::distinct(species, CELLCODE_eea_10km) |>
     dplyr::rename(CELLCODE = CELLCODE_eea_10km) |>
-    dplyr::mutate(in_observation = TRUE)
-
-  range_cells <- species_range |>
-    sf::st_drop_geometry() |>
-    dplyr::distinct(species, CELLCODE) |>
-    dplyr::mutate(in_range = TRUE)
-
-  dplyr::full_join(obs_cells, range_cells, by = c("species", "CELLCODE")) |>
-    dplyr::mutate(
-      in_observation = dplyr::if_else(is.na(in_observation), FALSE, in_observation),
-      in_range       = dplyr::if_else(is.na(in_range),       FALSE, in_range)
-    ) |>
-    dplyr::left_join(cell_area, by = "CELLCODE") |>
+    dplyr::left_join(cell_area_land, by = "CELLCODE") |>
     dplyr::group_by(species) |>
     dplyr::summarise(
       CellCount = dplyr::n(),

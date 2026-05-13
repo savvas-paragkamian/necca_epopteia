@@ -282,8 +282,8 @@ list(
     distributions_summary,
     build_distributions_summary(
       species_samples_presence_final = species_samples_presence_final,
-      species_range                  = species_range,
-      eea_grid_10km                  = spatial_layers$eea_grid_10km
+      eea_grid_10km                  = spatial_layers$eea_grid_10km,
+      greece_regions                 = spatial_layers$greece_regions
     )
   ),
 
