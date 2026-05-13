@@ -173,15 +173,16 @@ list(
   tar_target(
     species_occurrences_invertebrates,
     combine_all_occurrences(
-      gbif_occurrences              = gbif_occurrences,
-      e1x_mdpp_occurrences          = e1x_mdpp_occurrences,
-      e1x_db_sampling_occurrences   = e1x_db_sampling_occurrences,
-      e1x_db_reference_occurrences  = e1x_db_reference_occurrences,
-      e2x_occurrences               = e2x_occurrences,
+      gbif_occurrences                 = gbif_occurrences,
+      e1x_mdpp_occurrences             = e1x_mdpp_occurrences,
+      e1x_db_sampling_occurrences      = e1x_db_sampling_occurrences,
+      e1x_db_reference_occurrences     = e1x_db_reference_occurrences,
+      e2x_occurrences                  = e2x_occurrences,
       necca_redlist_points_occurrences = necca_redlist_points_occurrences,
-      e2x_ref_unio_crassus          = e2x_ref_unio_crassus,
-      e2x_ref_stenobothrus_eurasius = e2x_ref_stenobothrus_eurasius,
-      private_occurrences           = private_occurrences
+      e2x_ref_unio_crassus             = e2x_ref_unio_crassus,
+      e2x_ref_stenobothrus_eurasius    = e2x_ref_stenobothrus_eurasius,
+      private_occurrences              = private_occurrences,
+      p_apollo_action_plan_occurrences = p_apollo_action_plan_occurrences
     )
   ),
 
@@ -204,8 +205,7 @@ list(
   tar_target(
     species_samples_presence_minimum,
     build_presence_minimum(
-      species_samples_eea              = species_samples_eea,
-      p_apollo_action_plan_occurrences = p_apollo_action_plan_occurrences,
+      species_samples_eea               = species_samples_eea,
       national_report_distribution_grid = national_report_distribution_grid
     )
   ),

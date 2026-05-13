@@ -75,7 +75,8 @@ combine_all_occurrences <- function(
   necca_redlist_points_occurrences,
   e2x_ref_unio_crassus,
   e2x_ref_stenobothrus_eurasius,
-  private_occurrences
+  private_occurrences,
+  p_apollo_action_plan_occurrences
 ) {
   cols <- occurrence_columns_to_keep()
   list(
@@ -87,7 +88,8 @@ combine_all_occurrences <- function(
     necca_redlist_points_occurrences,
     e2x_ref_unio_crassus,
     e2x_ref_stenobothrus_eurasius,
-    private_occurrences
+    private_occurrences,
+    p_apollo_action_plan_occurrences
   ) |>
     purrr::map(~ dplyr::select(.x, dplyr::all_of(cols))) |>
     dplyr::bind_rows()
@@ -140,22 +142,15 @@ assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
 
 build_presence_minimum <- function(
   species_samples_eea,
-  p_apollo_action_plan_occurrences,
   national_report_distribution_grid
 ) {
-  # Combine samples with Apollo action plan (both already have CELLCODE_eea_10km)
-  species_samples_combined <- dplyr::bind_rows(
-    species_samples_eea,
-    p_apollo_action_plan_occurrences
-  )
-
   # Which cells appear in the 2013-2018 national report
   species_dist_national_minimum <- national_report_distribution_grid |>
     sf::st_drop_geometry() |>
     dplyr::distinct(species, CELLCODE_eea_10km, DistrMap_2013_2018)
 
   # Attach DistrMap flag and composite key for orphan detection
-  species_samples_combined_dist <- species_samples_combined |>
+  species_samples_combined_dist <- species_samples_eea |>
     dplyr::left_join(species_dist_national_minimum,
                      by = c("species", "CELLCODE_eea_10km")) |>
     dplyr::mutate(
