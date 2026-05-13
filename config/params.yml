@@ -13,7 +13,7 @@ paths:
   maps_dir: "results/maps"
 
 inputs:
-  taxonomy_curated: "data/raw/species_taxonomy_curated.tsv"
+  taxonomy_curated: "config/species_taxonomy_curated.tsv"
   gbif_occurrences: "data/raw/gbif_invertebrate_species_occ.tsv"
   e1x_mdpp: "data/raw/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΦΔ+ΜΔΠΠ_2014-2024_v8.xlsx"
   e1x_db: "data/raw/Ε1Χ_ΒΔ_ΠΡΩΤΟΓΕΝΩΝ_ΥΠ4_ΑΣΠΟΝΔΥΛΑ_20241204.xlsx"
