@@ -310,6 +310,62 @@ list(
     )
   ),
 
+  # --- Load (Official Outputs) ---
+
+  tar_target(
+    file_occurrences_invertebrates,
+    save_occurrences_tsv(
+      species_occurrences_invertebrates = species_occurrences_invertebrates,
+      path = a17_config$outputs$species_occurrences_invertebrates
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_art17_all,
+    save_art17_tsv(
+      species_samples_art17 = species_samples_art17,
+      path = a17_config$outputs$species_samples_art17_all
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_presence_final,
+    save_presence_final_tsv(
+      species_samples_presence_final = species_samples_presence_final,
+      path = a17_config$outputs$species_samples_presence_final
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_distributions_final,
+    save_distributions_tsv(
+      distributions_summary = distributions_summary,
+      path = a17_config$outputs$distributions_presence_final
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_populations_final,
+    save_populations_tsv(
+      populations_summary = populations_summary,
+      path = a17_config$outputs$populations_presence_final
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    file_natura_populations,
+    save_natura_populations_tsv(
+      natura_populations_summary = natura_populations_summary,
+      path = a17_config$outputs$natura_populations
+    ),
+    format = "file"
+  ),
+
   # --- Load (Maps) ---
 
   tar_target(
@@ -387,62 +443,6 @@ list(
       greece_regions                    = spatial_layers$greece_regions,
       natura2000                        = spatial_layers$natura2000,
       maps_dir                          = a17_config$paths$maps_dir
-    ),
-    format = "file"
-  ),
-
-  # --- Load (Official Outputs) ---
-
-  tar_target(
-    file_occurrences_invertebrates,
-    save_occurrences_tsv(
-      species_occurrences_invertebrates = species_occurrences_invertebrates,
-      path = a17_config$outputs$species_occurrences_invertebrates
-    ),
-    format = "file"
-  ),
-
-  tar_target(
-    file_art17_all,
-    save_art17_tsv(
-      species_samples_art17 = species_samples_art17,
-      path = a17_config$outputs$species_samples_art17_all
-    ),
-    format = "file"
-  ),
-
-  tar_target(
-    file_presence_final,
-    save_presence_final_tsv(
-      species_samples_presence_final = species_samples_presence_final,
-      path = a17_config$outputs$species_samples_presence_final
-    ),
-    format = "file"
-  ),
-
-  tar_target(
-    file_distributions_final,
-    save_distributions_tsv(
-      distributions_summary = distributions_summary,
-      path = a17_config$outputs$distributions_presence_final
-    ),
-    format = "file"
-  ),
-
-  tar_target(
-    file_populations_final,
-    save_populations_tsv(
-      populations_summary = populations_summary,
-      path = a17_config$outputs$populations_presence_final
-    ),
-    format = "file"
-  ),
-
-  tar_target(
-    file_natura_populations,
-    save_natura_populations_tsv(
-      natura_populations_summary = natura_populations_summary,
-      path = a17_config$outputs$natura_populations
     ),
     format = "file"
   )
