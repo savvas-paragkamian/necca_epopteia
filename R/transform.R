@@ -25,7 +25,8 @@ library(purrr)
 
 build_national_report_distribution_grid_occurrences <- function(
   species_distribution,
-  eea_grid_10km
+  eea_grid_10km,
+  species_taxonomy
 ) {
   species_dist_national_eea <- sf::st_join(
     eea_grid_10km,
@@ -45,8 +46,13 @@ build_national_report_distribution_grid_occurrences <- function(
       decimalLongitude = coords[, 1],
       decimalLatitude  = coords[, 2]
     ) |>
-    dplyr::distinct(submittedName, species, CELLCODE, decimalLongitude, decimalLatitude) |>
-    dplyr::rename(CELLCODE_eea_10km = CELLCODE) |>
+    dplyr::distinct(submittedName, CELLCODE, decimalLongitude, decimalLatitude) |>
+    dplyr::left_join(
+      dplyr::select(species_taxonomy, verbatim_name, acceptedName),
+      by = c("submittedName" = "verbatim_name")
+    ) |>
+    dplyr::rename(CELLCODE_eea_10km = CELLCODE, species = acceptedName) |>
+    dplyr::filter(!is.na(species)) |>
     dplyr::mutate(
       collectionCode     = "DistrMap_2013_2018",
       basisOfRecord      = "ESTIMATED_CENTROID",
@@ -104,14 +110,17 @@ combine_all_occurrences <- function(
     dplyr::bind_rows()
 }
 
-filter_art17_occurrences <- function(
-  species_occurrences_invertebrates,
-  species_taxonomy
-) {
-  species_names <- unique(species_taxonomy$verbatim_name)
+normalize_taxonomy <- function(species_occurrences_invertebrates, species_taxonomy) {
   species_occurrences_invertebrates |>
-    dplyr::filter(submittedName %in% species_names) |>
-    dplyr::left_join(species_taxonomy, by = c("submittedName" = "verbatim_name"))
+    dplyr::left_join(
+      dplyr::select(species_taxonomy, verbatim_name, acceptedName),
+      by = c("submittedName" = "verbatim_name")
+    ) |>
+    dplyr::rename(species = acceptedName)
+}
+
+filter_art17_occurrences <- function(species_occurrences_normalized) {
+  dplyr::filter(species_occurrences_normalized, !is.na(species))
 }
 
 assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
@@ -124,17 +133,6 @@ assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
     dplyr::group_by(dplyr::across(-recordNumber)) |>
     dplyr::summarise(recordNumber = stringr::str_c(recordNumber, collapse = ", "),
                      .groups = "keep") |>
-    dplyr::mutate(species = dplyr::case_when(
-      species == "Hirudo medicinalis"    ~ "Hirudo verbana",
-      species == "Unio vicarius"         ~ "Unio crassus",
-      species == "Unio ionicus"          ~ "Unio crassus",
-      species == "Unio bruguierianus"    ~ "Unio crassus",
-      species == "Unio desectus"         ~ "Unio crassus",
-      species == "Polyommatus eros"      ~ "Polyommatus eroides",
-      species == "Paracossulus thrips"   ~ "Catopta thrips",
-      species == "Osmoderma eremita"     ~ "Osmoderma lassallei",
-      .default = species
-    )) |>
     sf::st_as_sf(
       coords = c("decimalLongitude", "decimalLatitude"),
       remove = FALSE,

@@ -44,14 +44,6 @@ occurrence_columns_to_keep <- function() {
 read_gbif_occurrences <- function(path, greece_regions) {
   gbif_species_occ <- readr::read_delim(path, delim = "\t", show_col_types = FALSE) |>
     dplyr::mutate(collectionCode = "GBIF") |>
-    dplyr::mutate(
-      species = ifelse(
-        !is.na(verbatimScientificName) &
-          verbatimScientificName == "Panaxia quadripunctaria",
-        "Euplagia quadripunctaria",
-        as.character(species)
-      )
-    ) |>
     dplyr::rename(submittedName = species) |>
     dplyr::filter(coordinateUncertaintyInMeters < 1000)
 
@@ -253,56 +245,19 @@ read_necca_redlist_points_occurrences <- function(path) {
 
 read_national_report_distribution_occurrences <- function(
   distribution_path,
-  sensitive_distribution_path,
-  species_taxonomy
+  sensitive_distribution_path
 ) {
-  species_names_combined <- as.character(species_taxonomy$verbatim_name)
-
-  species_dist_national_rep <- sf::st_read(
-    distribution_path,
-    quiet = TRUE
-  )
-
-  species_dist_national_rep_sens <- sf::st_read(
-    sensitive_distribution_path,
-    quiet = TRUE
-  )
-
   dplyr::bind_rows(
-    species_dist_national_rep,
-    species_dist_national_rep_sens
+    sf::st_read(distribution_path,           quiet = TRUE),
+    sf::st_read(sensitive_distribution_path, quiet = TRUE)
   ) |>
     sf::st_make_valid() |>
     dplyr::mutate(
-      submittedName = gsub("\\* ?", "", iname),
-      submittedName = gsub(" Complex", "", submittedName),
-      submittedName = gsub(
-        "Osmoderma eremita",
-        "Osmoderma lassallei",
-        submittedName
-      )
-    ) |>
-    dplyr::filter(submittedName %in% species_names_combined) |>
-    dplyr::left_join(
-      species_taxonomy,
-      by = c("submittedName" = "verbatim_name")
-    ) |>
-    dplyr::mutate(
-      species = gsub("Osmoderma eremita", "Osmoderma lassallei", species),
-      species = gsub("Hirudo medicinalis", "Hirudo verbana", species),
-      species = gsub("Unio vicarius", "Unio crassus", species),
-      species = gsub("Unio ionicus", "Unio crassus", species),
-      species = gsub("Unio bruguierianus", "Unio crassus", species),
-      species = gsub("Unio desectus", "Unio crassus", species),
-      species = gsub("Polyommatus eros", "Polyommatus eroides", species),
-      species = gsub("Paracossulus thrips", "Catopta thrips", species),
+      submittedName  = gsub("\\* ?", "", iname),
       collectionCode = "National_report_2013_2018",
-      basisOfRecord = "ESTIMATED_DISTRIBUTION",
-      datasetName = paste(
-        basename(distribution_path),
-        basename(sensitive_distribution_path),
-        sep = ";"
-      )
+      basisOfRecord  = "ESTIMATED_DISTRIBUTION",
+      datasetName    = paste(basename(distribution_path),
+                             basename(sensitive_distribution_path), sep = ";")
     )
 }
 

@@ -142,13 +142,8 @@ list(
   tar_target(
     national_report_distribution_occurrences,
     read_national_report_distribution_occurrences(
-      distribution_path =
-        a17_config$inputs$national_report_distribution,
-  
-      sensitive_distribution_path =
-        a17_config$inputs$national_report_distribution_sensitive,
-  
-      species_taxonomy = species_taxonomy
+      distribution_path           = a17_config$inputs$national_report_distribution,
+      sensitive_distribution_path = a17_config$inputs$national_report_distribution_sensitive
     )
   ),
 
@@ -172,7 +167,8 @@ list(
     national_report_distribution_grid,
     build_national_report_distribution_grid_occurrences(
       species_distribution = national_report_distribution_occurrences,
-      eea_grid_10km        = spatial_layers$eea_grid_10km
+      eea_grid_10km        = spatial_layers$eea_grid_10km,
+      species_taxonomy     = species_taxonomy
     )
   ),
 
@@ -193,10 +189,17 @@ list(
   ),
 
   tar_target(
-    species_samples_art17,
-    filter_art17_occurrences(
+    species_occurrences_normalized,
+    normalize_taxonomy(
       species_occurrences_invertebrates = species_occurrences_invertebrates,
       species_taxonomy                  = species_taxonomy
+    )
+  ),
+
+  tar_target(
+    species_samples_art17,
+    filter_art17_occurrences(
+      species_occurrences_normalized = species_occurrences_normalized
     )
   ),
 
