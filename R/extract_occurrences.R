@@ -306,61 +306,11 @@ read_national_report_distribution_occurrences <- function(
     )
 }
 
-read_p_apollo_action_plan_occurrences <- function(path, eea_grid_10km) {
-
-  p_apollo_dist <- sf::st_read(path, quiet = TRUE) |>
+read_p_apollo_action_plan_occurrences <- function(path) {
+  sf::st_read(path, quiet = TRUE) |>
     dplyr::mutate(
       collectionCode = "Action Plan 2019",
-      basisOfRecord = "ESTIMATED_CENTROID"
-    )
-
-  p_apollo_centroids <- sf::st_centroid(p_apollo_dist)
-  p_apollo_coords <- sf::st_coordinates(p_apollo_centroids)
-
-  p_apollo_eea_coords <- cbind(
-    p_apollo_dist,
-    decimalLongitude = p_apollo_coords[, 1],
-    decimalLatitude = p_apollo_coords[, 2]
-  )
-
-  p_apollo_coords_laea <- p_apollo_eea_coords |>
-    sf::st_drop_geometry() |>
-    sf::st_as_sf(
-      coords = c("decimalLongitude", "decimalLatitude"),
-      remove = TRUE,
-      crs = sf::st_crs(eea_grid_10km)
-    )
-
-  p_apollo_coords_wgs <- sf::st_transform(
-    p_apollo_coords_laea,
-    4326
-  )
-
-  p_apollo_coords_d <- sf::st_coordinates(p_apollo_coords_wgs)
-
-  p_apollo_eea_coords_wgs <- cbind(
-    p_apollo_coords_wgs,
-    decimalLongitude = p_apollo_coords_d[, 1],
-    decimalLatitude = p_apollo_coords_d[, 2]
-  )
-
-  p_apollo_eea_coords_wgs |>
-    sf::st_drop_geometry() |>
-    dplyr::select(
-      -dplyr::any_of(c("EOFORIGIN", "NOFORIGIN"))
-    ) |>
-    dplyr::distinct() |>
-    dplyr::rename(
-      CELLCODE_eea_10km = CELLCODE
-    ) |>
-    dplyr::mutate(
-      recordNumber = paste0(
-        "action_plan_p.apollo_",
-        sprintf("%02d", dplyr::row_number())
-      ),
-      datasetName = basename(path),
-      species = "Parnassius apollo",
-      individualCount = NA,
-      submittedName = "Parnassius apollo"
+      basisOfRecord  = "ESTIMATED_CENTROID",
+      datasetName    = basename(path)
     )
 }

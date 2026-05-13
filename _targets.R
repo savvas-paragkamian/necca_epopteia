@@ -155,12 +155,18 @@ list(
   tar_target(
     p_apollo_action_plan_occurrences,
     read_p_apollo_action_plan_occurrences(
-      path = a17_config$inputs$p_apollo_action_plan,
-      eea_grid_10km = spatial_layers$eea_grid_10km
+      path = a17_config$inputs$p_apollo_action_plan
     )
   ),
 
   # --- Transform ---
+
+  tar_target(
+    p_apollo_grid_occurrences,
+    build_p_apollo_grid_occurrences(
+      p_apollo_action_plan_occurrences = p_apollo_action_plan_occurrences
+    )
+  ),
 
   tar_target(
     national_report_distribution_grid,
@@ -182,7 +188,7 @@ list(
       e2x_ref_unio_crassus             = e2x_ref_unio_crassus,
       e2x_ref_stenobothrus_eurasius    = e2x_ref_stenobothrus_eurasius,
       private_occurrences              = private_occurrences,
-      p_apollo_action_plan_occurrences = p_apollo_action_plan_occurrences
+      p_apollo_action_plan_occurrences = p_apollo_grid_occurrences
     )
   ),
 

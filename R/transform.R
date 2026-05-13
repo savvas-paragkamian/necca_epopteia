@@ -35,35 +35,44 @@ build_national_report_distribution_grid_occurrences <- function(
     largest = FALSE
   )
 
-  centroids <- sf::st_centroid(species_dist_national_eea)
-  coords    <- sf::st_coordinates(centroids)
+  centroids_wgs <- sf::st_centroid(species_dist_national_eea) |>
+    sf::st_transform(4326)
+  coords <- sf::st_coordinates(centroids_wgs)
 
-  species_dist_national_eea <- cbind(species_dist_national_eea,
-                                     decimalLongitude = coords[, 1],
-                                     decimalLatitude  = coords[, 2]) |>
+  species_dist_national_eea |>
+    sf::st_drop_geometry() |>
+    dplyr::mutate(
+      decimalLongitude = coords[, 1],
+      decimalLatitude  = coords[, 2]
+    ) |>
     dplyr::distinct(submittedName, species, CELLCODE, decimalLongitude, decimalLatitude) |>
     dplyr::rename(CELLCODE_eea_10km = CELLCODE) |>
     dplyr::mutate(
-      collectionCode    = "DistrMap_2013_2018",
-      basisOfRecord  = "ESTIMATED_CENTROID",
-      recordNumber   = paste0("DistrMap_2013_2018_", sprintf("%04d", dplyr::row_number())),
-      datasetName = "GR_Art17_species_distribution.shp",
+      collectionCode     = "DistrMap_2013_2018",
+      basisOfRecord      = "ESTIMATED_CENTROID",
+      recordNumber       = paste0("DistrMap_2013_2018_", sprintf("%04d", dplyr::row_number())),
+      datasetName        = "GR_Art17_species_distribution.shp",
       DistrMap_2013_2018 = TRUE
     )
+}
 
-  grid_laea <- species_dist_national_eea |>
-    sf::st_as_sf(
-      coords = c("decimalLongitude", "decimalLatitude"),
-      remove = TRUE,
-      crs    = sf::st_crs(species_distribution)
+build_p_apollo_grid_occurrences <- function(p_apollo_action_plan_occurrences) {
+  centroids_wgs <- sf::st_centroid(p_apollo_action_plan_occurrences) |>
+    sf::st_transform(4326)
+  coords <- sf::st_coordinates(centroids_wgs)
+
+  p_apollo_action_plan_occurrences |>
+    sf::st_drop_geometry() |>
+    dplyr::select(-dplyr::any_of(c("EOFORIGIN", "NOFORIGIN"))) |>
+    dplyr::distinct() |>
+    dplyr::mutate(
+      decimalLongitude = coords[, 1],
+      decimalLatitude  = coords[, 2],
+      recordNumber     = paste0("action_plan_p.apollo_", sprintf("%02d", dplyr::row_number())),
+      species          = "Parnassius apollo",
+      individualCount  = NA_real_,
+      submittedName    = "Parnassius apollo"
     )
-
-  grid_wgs <- sf::st_transform(grid_laea, 4326)
-  coords_wgs <- sf::st_coordinates(grid_wgs)
-
-  cbind(grid_wgs,
-        decimalLongitude = coords_wgs[, 1],
-        decimalLatitude  = coords_wgs[, 2])
 }
 
 combine_all_occurrences <- function(
