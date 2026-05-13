@@ -55,13 +55,26 @@ podman run --rm -it \
     myproj-rgeo:4.5.3
 ```
 
-Increase resources if needed:
+The full pipeline peaks at ~3.6 GiB RAM and runs in ~6.5 min on a single core.
+Ensure the podman machine has enough headroom:
 
 ```bash
 podman machine stop
-podman machine set --memory 12288 --cpus 5
+podman machine set --memory 6144 --cpus 4
 podman machine start
 ```
+
+#### Resource usage (benchmark, single core, full run from scratch)
+
+| Metric | Value |
+|--------|-------|
+| Wall clock time | 6 min 25 s |
+| User CPU time | 6 min 6 s |
+| Peak RAM (RSS) | 3.57 GiB |
+| Peak memory footprint | 189 MiB |
+
+User ≈ real time indicates near-single-threaded execution. Run with
+`tar_make(par_type = "future")` to parallelise the Extract targets.
 
 ### 2. Configuration
 
