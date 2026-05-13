@@ -36,6 +36,13 @@ library(ggnewscale)
   "SCISPA" = "#CC79A7"
 )
 
+# 18-color qualitative palette for species-level maps (Set1 + Set2 + Dark2)
+.species_colors_18 <- c(
+  "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628",
+  "#F781BF", "#999999", "#66C2A5", "#FC8D62", "#8DA0CB", "#E78AC3",
+  "#A6D854", "#FFD92F", "#E5C494", "#B3B3B3", "#1B9E77", "#D95F02"
+)
+
 .build_base_n2000_plot <- function(greece_regions_etrs89, natura2000_etrs89) {
   ggplot2::ggplot() +
     ggplot2::geom_sf(greece_regions_etrs89, mapping = ggplot2::aes()) +
@@ -267,6 +274,90 @@ save_species_range_maps <- function(
 save_species_range_shp <- function(species_range, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   sf::st_write(species_range, path, delete_layer = TRUE, quiet = TRUE)
+  path
+}
+
+save_distrmap_without_e1x_map <- function(
+  distrmap_cells_without_e1x,
+  eea_grid_10km,
+  greece_regions,
+  path
+) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  greece_etrs89   <- sf::st_transform(greece_regions, 3035)
+  eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
+
+  cells_sf <- eea_10km_etrs89 |>
+    dplyr::inner_join(
+      dplyr::rename(distrmap_cells_without_e1x, CELLCODE = CELLCODE_eea_10km),
+      by = "CELLCODE"
+    )
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_sf(greece_etrs89, mapping = ggplot2::aes(),
+                     fill = "grey95", colour = "grey60") +
+    ggplot2::geom_sf(cells_sf, mapping = ggplot2::aes(fill = species),
+                     alpha = 0.7, colour = "transparent") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      axis.title      = ggplot2::element_blank(),
+      axis.text       = ggplot2::element_text(colour = "black"),
+      legend.title    = ggplot2::element_text(size = 7),
+      legend.text     = ggplot2::element_text(size = 7, face = "italic"),
+      legend.position = "right"
+    ) +
+    ggplot2::labs(
+      title = "National report 2013–2018: cells with no E1X_DB monitoring data",
+      fill  = "Species"
+    )
+
+  ggplot2::ggsave(path, plot = p,
+                  height = 20, width = 35, dpi = 300, units = "cm", device = "png")
+  path
+}
+
+save_national_report_orphan_map <- function(
+  national_report_orphan_cells,
+  eea_grid_10km,
+  greece_regions,
+  path
+) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  greece_etrs89   <- sf::st_transform(greece_regions, 3035)
+  eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
+
+  orphan_sf <- eea_10km_etrs89 |>
+    dplyr::inner_join(
+      dplyr::rename(national_report_orphan_cells, CELLCODE = CELLCODE_eea_10km),
+      by = "CELLCODE"
+    )
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_sf(greece_etrs89, mapping = ggplot2::aes(), fill = "grey95", colour = "grey60") +
+    ggplot2::geom_sf(orphan_sf,
+                     mapping = ggplot2::aes(fill = species),
+                     alpha = 0.7, colour = "transparent") +
+    ggplot2::scale_fill_manual(
+      values = stats::setNames(.species_colors_18[seq_len(dplyr::n_distinct(orphan_sf$species))],
+                               sort(unique(orphan_sf$species)))
+    ) +
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      axis.title      = ggplot2::element_blank(),
+      axis.text       = ggplot2::element_text(colour = "black"),
+      legend.title    = ggplot2::element_text(size = 7),
+      legend.text     = ggplot2::element_text(size = 7, face = "italic"),
+      legend.position = "right"
+    ) +
+    ggplot2::labs(
+      title = "National report 2013–2018: cells with no supporting field data",
+      fill  = "Species"
+    )
+
+  ggplot2::ggsave(path, plot = p,
+                  height = 20, width = 35, dpi = 300, units = "cm", device = "png")
   path
 }
 
