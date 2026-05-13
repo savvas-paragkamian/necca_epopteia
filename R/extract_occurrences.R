@@ -77,7 +77,7 @@ read_e1x_mdpp_occurrences <- function(path) {
       decimalLatitude = as.numeric(`Γεωγραφικό Πλάτος (WGS84) Αρχη`),
       decimalLongitude = as.numeric(`Γεωγραφικό Μήκος (WGS84) Αρχή`)
     ) |>
-    dplyr::filter(!is.na(decimalLongitude)) |>
+#    dplyr::filter(!is.na(decimalLongitude)) |>
     dplyr::mutate(collectionCode = "E1X_MDPP_2014_2024") |>
     dplyr::mutate(basisOfRecord = "MATERIAL_SAMPLE")
 
@@ -127,6 +127,7 @@ read_e1x_db_reference_occurrences <- function(path) {
   ref_samples_data |>
     dplyr::left_join(refs_data, by = c("Κωδικός Αναφοράς" = "Κωδικός Αναφοράς")) |>
     dplyr::mutate(collectionCode = "E1X_DB_references") |>
+    dplyr::mutate(CELLCODE_eea_10km = `Κωδικός Κελιού Πλέγματος 10x10km (ETRS LAEA)`) |>
     dplyr::mutate(basisOfRecord = "MaterialCitation") |>
     dplyr::mutate(submittedName = `Ονομασία είδους`) |>
     dplyr::mutate(individualCount = as.numeric(`Πλήθος ατόμων`)) |>
@@ -167,6 +168,8 @@ read_e1x_db_sampling_occurrences <- function(path) {
     dplyr::mutate(recordNumber = Obs_ID) |>
     dplyr::mutate(datasetName = basename(path))
 
+  # this is specific to this dataset. If individualCount is above 0 
+  # it means it was identified. If zero, it means they didn't find it.
   all_data |>
     dplyr::filter(individualCount > 0)
 }
