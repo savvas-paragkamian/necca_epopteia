@@ -100,6 +100,27 @@ list(
 
   tar_target(
 
+    e1x_ref_grid_occurrences,
+
+    build_e1x_ref_grid_occurrences(
+      e1x_db_reference_occurrences = e1x_db_reference_occurrences,
+      eea_grid_10km                = spatial_layers$eea_grid_10km
+    )
+
+  ),
+
+  tar_target(
+
+    e1x_db_reference_coords,
+
+    filter_e1x_ref_coords(
+      e1x_db_reference_occurrences = e1x_db_reference_occurrences
+    )
+
+  ),
+
+  tar_target(
+
     e2x_occurrences,
 
     read_e2x_occurrences(a17_config$inputs$e2x_db)
@@ -178,13 +199,14 @@ list(
       gbif_occurrences                 = gbif_occurrences,
       e1x_mdpp_occurrences             = e1x_mdpp_occurrences,
       e1x_db_sampling_occurrences      = e1x_db_sampling_occurrences,
-      e1x_db_reference_occurrences     = e1x_db_reference_occurrences,
+      e1x_db_reference_occurrences     = e1x_db_reference_coords,
       e2x_occurrences                  = e2x_occurrences,
       necca_redlist_points_occurrences = necca_redlist_points_occurrences,
       e2x_ref_unio_crassus             = e2x_ref_unio_crassus,
       e2x_ref_stenobothrus_eurasius    = e2x_ref_stenobothrus_eurasius,
       private_occurrences              = private_occurrences,
-      p_apollo_action_plan_occurrences = p_apollo_grid_occurrences
+      p_apollo_action_plan_occurrences = p_apollo_grid_occurrences,
+      e1x_ref_grid_occurrences         = e1x_ref_grid_occurrences
     )
   ),
 
@@ -204,18 +226,56 @@ list(
   ),
 
   tar_target(
+    species_samples_art17_dedup,
+    deduplicate_art17_occurrences(
+      species_samples_art17 = species_samples_art17
+    )
+  ),
+
+  tar_target(
+    species_samples_art17_coords,
+    filter_art17_coords(
+      species_samples_art17_dedup = species_samples_art17_dedup
+    )
+  ),
+
+  tar_target(
     species_samples_eea,
     assign_eea_grid_10km(
-      species_samples_art17 = species_samples_art17,
-      eea_grid_10km         = spatial_layers$eea_grid_10km
+      species_samples_art17_coords = species_samples_art17_coords,
+      eea_grid_10km                = spatial_layers$eea_grid_10km
+    )
+  ),
+
+  tar_target(
+    distrmap_cells_without_e1x,
+    find_distrmap_cells_without_e1x(
+      species_samples_eea               = species_samples_eea,
+      national_report_distribution_grid = national_report_distribution_grid
+    )
+  ),
+
+  tar_target(
+    species_samples_eea_filtered,
+    filter_e1x_ref_grid(
+      species_samples_eea = species_samples_eea
+    )
+  ),
+
+  tar_target(
+    national_report_orphan_cells,
+    find_national_report_orphan_cells(
+      species_samples_eea               = species_samples_eea_filtered,
+      national_report_distribution_grid = national_report_distribution_grid
     )
   ),
 
   tar_target(
     species_samples_presence_minimum,
     build_presence_minimum(
-      species_samples_eea               = species_samples_eea,
-      national_report_distribution_grid = national_report_distribution_grid
+      species_samples_eea               = species_samples_eea_filtered,
+      national_report_distribution_grid = national_report_distribution_grid,
+      national_report_orphan_cells      = national_report_orphan_cells
     )
   ),
 
@@ -367,6 +427,30 @@ list(
   ),
 
   # --- Load (Maps) ---
+
+  tar_target(
+    map_distrmap_without_e1x,
+    save_distrmap_without_e1x_map(
+      distrmap_cells_without_e1x = distrmap_cells_without_e1x,
+      eea_grid_10km              = spatial_layers$eea_grid_10km,
+      greece_regions             = spatial_layers$greece_regions,
+      path = file.path(a17_config$paths$maps_dir,
+                       "map_distrmap_cells_without_e1x.png")
+    ),
+    format = "file"
+  ),
+
+  tar_target(
+    map_national_report_orphans,
+    save_national_report_orphan_map(
+      national_report_orphan_cells = national_report_orphan_cells,
+      eea_grid_10km                = spatial_layers$eea_grid_10km,
+      greece_regions               = spatial_layers$greece_regions,
+      path = file.path(a17_config$paths$maps_dir,
+                       "map_national_report_orphan_cells.png")
+    ),
+    format = "file"
+  ),
 
   tar_target(
     map_borders_quality,

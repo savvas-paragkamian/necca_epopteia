@@ -62,6 +62,38 @@ build_national_report_distribution_grid_occurrences <- function(
     )
 }
 
+filter_e1x_ref_coords <- function(e1x_db_reference_occurrences) {
+  dplyr::filter(e1x_db_reference_occurrences, !is.na(decimalLatitude))
+}
+
+build_e1x_ref_grid_occurrences <- function(e1x_db_reference_occurrences, eea_grid_10km) {
+  cols <- c(occurrence_columns_to_keep(), "CELLCODE_eea_10km")
+
+  records_no_coords <- e1x_db_reference_occurrences |>
+    dplyr::filter(is.na(decimalLatitude)) |>
+    dplyr::select(dplyr::all_of(cols))
+
+  eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
+
+  records_sf <- eea_10km_etrs89 |>
+    dplyr::select(CELLCODE) |>
+    dplyr::inner_join(records_no_coords, by = c("CELLCODE" = "CELLCODE_eea_10km"))
+
+  centroids_wgs <- sf::st_centroid(records_sf) |>
+    sf::st_transform(4326)
+  coords <- sf::st_coordinates(centroids_wgs)
+
+  records_sf |>
+    sf::st_drop_geometry() |>
+    dplyr::rename(CELLCODE_eea_10km = CELLCODE) |>
+    dplyr::mutate(
+      decimalLatitude  = coords[, 2],
+      decimalLongitude = coords[, 1],
+      basisOfRecord    = "MaterialCitation|ESTIMATED_CENTROID",
+      collectionCode   = "E1X_DB_references_grid"
+    )
+}
+
 build_p_apollo_grid_occurrences <- function(p_apollo_action_plan_occurrences) {
   centroids_wgs <- sf::st_centroid(p_apollo_action_plan_occurrences) |>
     sf::st_transform(4326)
@@ -91,7 +123,8 @@ combine_all_occurrences <- function(
   e2x_ref_unio_crassus,
   e2x_ref_stenobothrus_eurasius,
   private_occurrences,
-  p_apollo_action_plan_occurrences
+  p_apollo_action_plan_occurrences,
+  e1x_ref_grid_occurrences
 ) {
   cols <- occurrence_columns_to_keep()
   list(
@@ -104,11 +137,13 @@ combine_all_occurrences <- function(
     e2x_ref_unio_crassus,
     e2x_ref_stenobothrus_eurasius,
     private_occurrences,
-    p_apollo_action_plan_occurrences
+    p_apollo_action_plan_occurrences,
+    e1x_ref_grid_occurrences
   ) |>
     purrr::map(~ dplyr::select(.x, dplyr::all_of(cols))) |>
     dplyr::bind_rows()
 }
+
 
 normalize_taxonomy <- function(species_occurrences_invertebrates, species_taxonomy) {
   species_occurrences_invertebrates |>
@@ -123,16 +158,26 @@ filter_art17_occurrences <- function(species_occurrences_normalized) {
   dplyr::filter(species_occurrences_normalized, !is.na(species))
 }
 
-assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
+# two levels of deduplication
+# first is that the complete line is duplicated
+# second is that the line is duplicated except from recordNumber. Meaning
+# that the columns used here do not suffice for the uniquenness of the line.
+deduplicate_art17_occurrences <- function(species_samples_art17) {
+  species_samples_art17 |>
+    dplyr::distinct() |>
+    dplyr::group_by(dplyr::across(-recordNumber)) |> 
+    dplyr::summarise(recordNumber = stringr::str_c(recordNumber, collapse = ", "),.groups = "keep") |>
+    dplyr::ungroup()
+}
+
+filter_art17_coords <- function(species_samples_art17_dedup) {
+  dplyr::filter(species_samples_art17_dedup, !is.na(decimalLatitude))
+}
+
+assign_eea_grid_10km <- function(species_samples_art17_coords, eea_grid_10km) {
   eea_10km_etrs89 <- sf::st_transform(eea_grid_10km, 3035)
 
-  species_samples_art17 |>
-    dplyr::filter(!is.na(decimalLatitude)) |>
-    dplyr::distinct(submittedName, decimalLatitude, decimalLongitude, collectionCode,
-                    datasetName, recordNumber, basisOfRecord, individualCount, species) |>
-    dplyr::group_by(dplyr::across(-recordNumber)) |>
-    dplyr::summarise(recordNumber = stringr::str_c(recordNumber, collapse = ", "),
-                     .groups = "keep") |>
+  species_samples_art17_coords |>
     sf::st_as_sf(
       coords = c("decimalLongitude", "decimalLatitude"),
       remove = FALSE,
@@ -147,42 +192,51 @@ assign_eea_grid_10km <- function(species_samples_art17, eea_grid_10km) {
                     CELLCODE_eea_10km, species)
 }
 
-build_presence_minimum <- function(
+find_distrmap_cells_without_e1x <- function(
   species_samples_eea,
   national_report_distribution_grid
 ) {
-  # Which cells appear in the 2013-2018 national report
-  species_dist_national_minimum <- national_report_distribution_grid |>
-    sf::st_drop_geometry() |>
+  e1x_db_cells <- species_samples_eea |>
+    dplyr::filter(stringr::str_detect(collectionCode, "^E1X_DB")) |>
+    dplyr::distinct(species, CELLCODE_eea_10km)
+
+  national_report_distribution_grid |>
+    dplyr::distinct(species, CELLCODE_eea_10km) |>
+    dplyr::anti_join(e1x_db_cells, by = c("species", "CELLCODE_eea_10km"))
+}
+
+find_national_report_orphan_cells <- function(
+  species_samples_eea,
+  national_report_distribution_grid
+) {
+  eea_cells_no_gbif <- species_samples_eea |>
+    dplyr::filter(collectionCode != "GBIF") |>
+    dplyr::distinct(species, CELLCODE_eea_10km)
+
+  national_report_distribution_grid |>
+    dplyr::anti_join(eea_cells_no_gbif, by = c("species", "CELLCODE_eea_10km")) |>
+    dplyr::mutate(individualCount = NA_real_)
+}
+
+filter_e1x_ref_grid <- function(species_samples_eea) {
+  dplyr::filter(species_samples_eea, collectionCode != "E1X_DB_references_grid")
+}
+
+build_presence_minimum <- function(
+  species_samples_eea,
+  national_report_distribution_grid,
+  national_report_orphan_cells
+) {
+  distrmap_flag <- national_report_distribution_grid |>
     dplyr::distinct(species, CELLCODE_eea_10km, DistrMap_2013_2018)
 
-  # Attach DistrMap flag and composite key for orphan detection
-  species_samples_combined_dist <- species_samples_eea |>
-    dplyr::left_join(species_dist_national_minimum,
-                     by = c("species", "CELLCODE_eea_10km")) |>
+  species_samples_flagged <- species_samples_eea |>
+    dplyr::left_join(distrmap_flag, by = c("species", "CELLCODE_eea_10km")) |>
     dplyr::mutate(
-      DistrMap_2013_2018 = dplyr::if_else(is.na(DistrMap_2013_2018), FALSE, DistrMap_2013_2018),
-      composite_key      = paste0(species, "_", CELLCODE_eea_10km)
+      DistrMap_2013_2018 = dplyr::if_else(is.na(DistrMap_2013_2018), FALSE, DistrMap_2013_2018)
     )
 
-  # National report as flat dataset (geometry and DistrMap flag dropped)
-  national_report_dataset <- national_report_distribution_grid |>
-    sf::st_drop_geometry() |>
-    dplyr::select(-DistrMap_2013_2018) |>
-    dplyr::mutate(composite_key = paste0(species, "_", CELLCODE_eea_10km))
-
-  # Orphan cells: in national report but absent from non-GBIF point data
-  samples_no_gbif_keys <- species_samples_combined_dist |>
-    dplyr::filter(collectionCode != "GBIF") |>
-    dplyr::pull(composite_key) |>
-    unique()
-
-  national_orphans <- national_report_dataset |>
-    dplyr::filter(!composite_key %in% samples_no_gbif_keys) |>
-    dplyr::mutate(DistrMap_2013_2018 = TRUE, individualCount = NA)
-
-  dplyr::bind_rows(species_samples_combined_dist, national_orphans) |>
-    dplyr::select(-composite_key)
+  dplyr::bind_rows(species_samples_flagged, national_report_orphan_cells)
 }
 
 enrich_with_elevation <- function(species_samples_presence_minimum, eu_dem_path) {
