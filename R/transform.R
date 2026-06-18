@@ -162,6 +162,7 @@ filter_art17_occurrences <- function(species_occurrences_normalized) {
 # first is that the complete line is duplicated
 # second is that the line is duplicated except from recordNumber. Meaning
 # that the columns used here do not suffice for the uniquenness of the line.
+# expample tar_read(species_samples_art17_dedup) |> dplyr::filter(grepl(", ",recordNumber)) |> dplyr::count(collectionCode)
 deduplicate_art17_occurrences <- function(species_samples_art17) {
   species_samples_art17 |>
     dplyr::distinct() |>

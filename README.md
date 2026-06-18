@@ -313,6 +313,8 @@ All output paths are declared in `config/params.yml`.
 
 ---
 
+![ETL Pipeline](ETL_Pipeline.png)
+
 ## Software
 
 R 4.5.3 managed via `renv`. Key packages:
